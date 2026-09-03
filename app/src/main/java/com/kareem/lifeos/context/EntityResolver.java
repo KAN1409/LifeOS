@@ -8,7 +8,8 @@ import java.util.Map;
 
 /**
  * Conservative entity resolver. It promotes only explicit capture metadata and stream identity;
- * it does not guess people from arbitrary message text.
+ * it does not guess people from arbitrary message text. Inferred conversation identities are
+ * source-scoped; cross-source linking requires an explicit canonical entity id.
  */
 public final class EntityResolver {
     private EntityResolver() {}
@@ -16,6 +17,9 @@ public final class EntityResolver {
     public static List<EntityRef> resolve(RawObservation observation) {
         LinkedHashMap<String,EntityRef> out = new LinkedHashMap<String,EntityRef>();
         if (observation == null) return new ArrayList<EntityRef>();
+
+        String sourceScope = normalize(observation.sourcePackage.isEmpty()
+                ? observation.sourceKind.name() : observation.sourcePackage);
 
         if (!observation.sourcePackage.isEmpty()) {
             put(out, new EntityRef("app:" + normalize(observation.sourcePackage),
@@ -36,13 +40,13 @@ public final class EntityResolver {
         String streamLabel = streamLabel(observation.streamId, observation.sourcePackage);
 
         if (!conversation.isEmpty()) {
-            put(out, new EntityRef("conversation:" + normalize(conversation),
+            put(out, new EntityRef(conversationId(sourceScope, conversation),
                     EntityRef.Kind.CONVERSATION, conversation, 0.98));
         } else if (!streamLabel.isEmpty()) {
-            put(out, new EntityRef("conversation:" + normalize(streamLabel),
+            put(out, new EntityRef(conversationId(sourceScope, streamLabel),
                     EntityRef.Kind.CONVERSATION, streamLabel, 0.80));
         } else if (title != null && !title.trim().isEmpty() && observation.sourceKind == RawObservation.SourceKind.NOTIFICATION) {
-            put(out, new EntityRef("conversation:" + normalize(title),
+            put(out, new EntityRef(conversationId(sourceScope, title),
                     EntityRef.Kind.CONVERSATION, title.trim(), 0.65));
         }
         return new ArrayList<EntityRef>(out.values());
@@ -53,6 +57,10 @@ public final class EntityResolver {
         if (a != null) for (EntityRef e : a) put(out, e);
         if (b != null) for (EntityRef e : b) put(out, e);
         return new ArrayList<EntityRef>(out.values());
+    }
+
+    private static String conversationId(String sourceScope, String label) {
+        return "conversation:" + sourceScope + ":" + normalize(label);
     }
 
     private static void put(Map<String,EntityRef> out, EntityRef e) {
