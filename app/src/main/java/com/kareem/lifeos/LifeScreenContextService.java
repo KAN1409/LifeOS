@@ -5,6 +5,9 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.os.Handler;
 import android.os.Looper;
+import com.kareem.lifeos.engine.AccessibilityTreeCapture;
+import com.kareem.lifeos.engine.ParallelUnderstandingProbe;
+import com.kareem.lifeos.engine.RawScreenSnapshot;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.LinkedHashSet;
@@ -21,7 +24,16 @@ public final class LifeScreenContextService extends AccessibilityService {
     }
     @Override public void onInterrupt(){}
     @Override public void onDestroy(){handler.removeCallbacks(pendingCapture);super.onDestroy();}
-    private Snapshot prepare(String pkg){AccessibilityNodeInfo root=getRootInActiveWindow();if(root==null)return null;CharSequence actual=root.getPackageName();if(actual==null||!pkg.equals(actual.toString())){root.recycle();return null;}LinkedHashSet<String> pieces=new LinkedHashSet<>();collect(root,pieces,0);root.recycle();if(pieces.size()<2||!isConversation(pieces))return null;String conversation=conversationTitle(pieces);if(conversation.isEmpty())return null;StringBuilder body=new StringBuilder();for(String x:pieces){if(skipChrome(x))continue;if(body.length()>0)body.append(" · ");body.append(x);}String text=body.toString();if(text.length()<2||CapturePolicy.isMessagingHomeSnapshot(text))return null;if(text.length()>12000)text=text.substring(0,12000);String thread=pkg+"|"+conversation.toLowerCase(Locale.ROOT);return new Snapshot(pkg,conversation,text,thread,pieces);}
+    private Snapshot prepare(String pkg){AccessibilityNodeInfo root=getRootInActiveWindow();if(root==null)return null;CharSequence actual=root.getPackageName();if(actual==null||!pkg.equals(actual.toString())){root.recycle();return null;}
+        // M1 shadow mode: preserve the complete accessibility structure in memory and classify it,
+        // while the proven v0.7.0 path below remains the only path allowed to persist or affect UI.
+        try{
+            int width=getResources().getDisplayMetrics().widthPixels;
+            int height=getResources().getDisplayMetrics().heightPixels;
+            RawScreenSnapshot raw=AccessibilityTreeCapture.capture(root,pkg,System.currentTimeMillis(),width,height);
+            ParallelUnderstandingProbe.observe(raw);
+        }catch(Throwable ignored){}
+        LinkedHashSet<String> pieces=new LinkedHashSet<>();collect(root,pieces,0);root.recycle();if(pieces.size()<2||!isConversation(pieces))return null;String conversation=conversationTitle(pieces);if(conversation.isEmpty())return null;StringBuilder body=new StringBuilder();for(String x:pieces){if(skipChrome(x))continue;if(body.length()>0)body.append(" · ");body.append(x);}String text=body.toString();if(text.length()<2||CapturePolicy.isMessagingHomeSnapshot(text))return null;if(text.length()>12000)text=text.substring(0,12000);String thread=pkg+"|"+conversation.toLowerCase(Locale.ROOT);return new Snapshot(pkg,conversation,text,thread,pieces);}
     private void commitPending(){Snapshot s=pending;pending=null;if(s==null)return;long now=System.currentTimeMillis();try(LifeDb db=new LifeDb(this)){long id=db.upsertScreenEvent("screen|"+sha(s.thread),s.pkg,"Visible conversation",s.text,s.thread,now);if(id>0)for(String piece:s.pieces)if(!skipChrome(piece))for(OpenLoopExtractor.Candidate x:OpenLoopExtractor.extract("",piece,now))db.upsertLoop(id,x);}}
     private static void collect(AccessibilityNodeInfo n,LinkedHashSet<String> out,int depth){if(n==null||depth>35||out.size()>250)return;CharSequence t=n.getText();if(t!=null){String x=t.toString().trim();if(!x.isEmpty()&&x.length()<=1000)out.add(x);}for(int i=0;i<n.getChildCount();i++){AccessibilityNodeInfo child=n.getChild(i);if(child!=null){collect(child,out,depth+1);child.recycle();}}}
     private static boolean isConversation(LinkedHashSet<String> xs){for(String x:xs)if("Message".equalsIgnoreCase(x)||"رسالة".equals(x))return true;return false;}
