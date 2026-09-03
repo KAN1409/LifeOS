@@ -14,9 +14,13 @@ public final class NotificationUnderstandingProbe {
 
     public static synchronized void observe(String thread,String text,long at){
         if(text==null||text.trim().isEmpty())return;
-        recent.add(new NotificationObservation(thread,text,at,0.86));
+        NotificationObservation observation=new NotificationObservation(thread,text,at,0.86);
+        recent.add(observation);
         while(recent.size()>MAX)recent.remove(0);
+        ShadowCanonicalStore store=ShadowCanonicalStore.shared();
+        store.appendRaw(new RawEvidenceRecord("NOTIFICATION",thread,"MESSAGE",MessageObservation.Direction.IN,text,at,observation.confidence));
         lastCanonical=ReconciliationEngine.reconcile("",ParallelUnderstandingProbe.lastMessages(),new ArrayList<NotificationObservation>(recent));
+        store.replaceCanonical(lastCanonical);
     }
 
     public static synchronized List<NotificationObservation> recent(){

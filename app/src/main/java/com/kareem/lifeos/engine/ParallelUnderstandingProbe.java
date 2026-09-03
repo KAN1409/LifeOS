@@ -12,6 +12,7 @@ public final class ParallelUnderstandingProbe {
     private static volatile List<MessageObservation> lastMessages=Collections.emptyList();
     private static volatile List<MessageMetadataEvidence> lastMetadata=Collections.emptyList();
     private ParallelUnderstandingProbe(){}
+
     public static void observe(RawScreenSnapshot snapshot){
         lastSnapshot=snapshot;
         lastState=StructuralScreenClassifier.classify(snapshot);
@@ -19,7 +20,13 @@ public final class ParallelUnderstandingProbe {
         lastBubbles=BubbleClusterer.cluster(snapshot,lastElements);
         lastMessages=MessageObservationBuilder.build(lastBubbles,snapshot==null?0L:snapshot.capturedAt);
         lastMetadata=MessageMetadataAssociator.associate(lastElements,lastMessages);
+        ShadowCanonicalStore store=ShadowCanonicalStore.shared();
+        for(MessageObservation m:lastMessages){
+            store.appendRaw(new RawEvidenceRecord("SCREEN","",m.type,m.direction,m.text,m.observedAt,m.confidence));
+        }
+        store.replaceCanonical(ReconciliationEngine.reconcile("",lastMessages,NotificationUnderstandingProbe.recent()));
     }
+
     public static RawScreenSnapshot lastSnapshot(){return lastSnapshot;}
     public static ScreenState lastState(){return lastState;}
     public static List<StructuralElement> lastElements(){return lastElements;}
