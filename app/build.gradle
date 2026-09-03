@@ -15,7 +15,6 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix '.preview'
             versionNameSuffix '-debug'
         }
         release {
