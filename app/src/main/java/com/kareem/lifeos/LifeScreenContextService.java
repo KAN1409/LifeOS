@@ -6,6 +6,7 @@ import android.view.accessibility.AccessibilityNodeInfo;
 import android.os.Handler;
 import android.os.Looper;
 import com.kareem.lifeos.context.AccessibilityObservationAdapter;
+import com.kareem.lifeos.context.ObservationDeduplicator;
 import com.kareem.lifeos.context.RawObservation;
 import com.kareem.lifeos.context.UniversalObservationStore;
 import com.kareem.lifeos.engine.AccessibilityTreeCapture;
@@ -25,6 +26,7 @@ public final class LifeScreenContextService extends AccessibilityService {
     private final Runnable pendingCapture=this::commitPending;
     private final Runnable pendingUniversalCapture=this::commitUniversalCapture;
     private static final AccessibilityObservationAdapter V2_ADAPTER=new AccessibilityObservationAdapter();
+    private final ObservationDeduplicator v2Deduplicator=new ObservationDeduplicator();
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null||event.getPackageName()==null)return;
@@ -42,7 +44,7 @@ public final class LifeScreenContextService extends AccessibilityService {
         Snapshot next=prepare(pkg);if(next==null)return;pending=next;handler.removeCallbacks(pendingCapture);handler.postDelayed(pendingCapture,1200);
     }
     @Override public void onInterrupt(){}
-    @Override public void onDestroy(){handler.removeCallbacks(pendingCapture);handler.removeCallbacks(pendingUniversalCapture);super.onDestroy();}
+    @Override public void onDestroy(){handler.removeCallbacks(pendingCapture);handler.removeCallbacks(pendingUniversalCapture);v2Deduplicator.reset();super.onDestroy();}
 
     private void commitUniversalCapture(){
         String expected=pendingUniversalPackage;pendingUniversalPackage=null;if(expected==null||expected.isEmpty())return;
@@ -53,7 +55,8 @@ public final class LifeScreenContextService extends AccessibilityService {
             int height=getResources().getDisplayMetrics().heightPixels;
             RawScreenSnapshot raw=AccessibilityTreeCapture.capture(root,expected,System.currentTimeMillis(),width,height);
             RawObservation observation=V2_ADAPTER.adapt(raw);
-            UniversalObservationStore.get(this).append(observation);
+            ObservationDeduplicator.Decision decision=v2Deduplicator.evaluate(observation);
+            if(decision.persist)UniversalObservationStore.get(this).append(observation);
         }catch(Throwable ignored){}finally{root.recycle();}
     }
 
