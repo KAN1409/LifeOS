@@ -18,6 +18,7 @@ final class OpenLoopExtractor {
     }
 
     private static final Pattern TIME=Pattern.compile("(?i)(?:at|الساعة|الساعه)\\s*(1[0-2]|0?[1-9])(?::([0-5]\\d))?\\s*(am|pm|ص|م)?");
+    private static final Pattern DATE_WORD=Pattern.compile("(?i)\\b(today|tomorrow|tonight|النهارده|النهاردة|بكرة|بكره|الليلة)\\b");
     private static final String[] REQUEST={"please","can you","could you","send me","remind me","لو سمحت","ممكن","ابعتلي","فكرني","عايزك","عاوزك"};
     private static final String[] COMMITMENT={"i will","i'll","will send","i can send","هعمل","هبعت","هكلم","هخلص","هراجع","هروح"};
     private static final String[] SCHEDULE={"meeting","appointment","booked","booking","reservation","call at","meet at","موعد","حجز","مقابلة","اجتماع","هنقابل","هنتقابل","مكالمة الساعة","معاد"};
@@ -35,11 +36,13 @@ final class OpenLoopExtractor {
         else if(containsAny(low,REQUEST)){kind="request";confidence=.78;}
 
         Matcher tm=TIME.matcher(low);
-        boolean schedulingIntent=containsAny(low,SCHEDULE);
-        if(schedulingIntent && tm.find()){
+        boolean hasClock=tm.find();
+        boolean explicitDateTime=hasClock&&DATE_WORD.matcher(low).find();
+        boolean schedulingIntent=containsAny(low,SCHEDULE)||explicitDateTime;
+        if(schedulingIntent&&hasClock){
             if(kind==null)kind="appointment";
             confidence=Math.max(confidence,.86);
-        }else if(schedulingIntent && kind==null){
+        }else if(containsAny(low,SCHEDULE)&&kind==null){
             kind="appointment";confidence=.72;
         }
 
@@ -47,9 +50,7 @@ final class OpenLoopExtractor {
         return out;
     }
 
-    private static boolean isMachineGenerated(String low){
-        return containsAny(low,TRANSACTIONAL)||containsAny(low,SYSTEM);
-    }
+    private static boolean isMachineGenerated(String low){return containsAny(low,TRANSACTIONAL)||containsAny(low,SYSTEM);}
     private static boolean containsAny(String s,String[] xs){for(String x:xs)if(s.contains(x))return true;return false;}
     private static String clip(String s,int n){return s.length()<=n?s:s.substring(0,n)+"…";}
     private static String sha(String value){try{byte[] b=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));StringBuilder x=new StringBuilder();for(byte q:b)x.append(String.format(Locale.US,"%02x",q));return x.toString();}catch(Exception e){return Integer.toHexString(value.hashCode());}}
