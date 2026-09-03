@@ -1,19 +1,20 @@
 package com.kareem.lifeos.memory;
 
+import com.kareem.lifeos.retrieval.RrfFusion;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 
 /**
- * Source-neutral port/adaptation of the durable-memory mechanics in
- * adgapar/teya MemoryManager.kt (Apache-2.0).
+ * Source-neutral port/adaptation of durable-memory mechanics from
+ * adgapar/teya MemoryManager.kt (Apache-2.0), with hybrid retrieval upgraded
+ * using openintelligence-labs/secondbrain RRF fusion (MIT).
  *
  * Preserved behavior: category-specific forgetting curves, HOT/COLD tiers,
- * episodic death threshold, cosine retrieval with keyword fallback, and
- * recall reinforcement. LifeOS adds evidence provenance at the record layer.
+ * episodic death threshold and recall reinforcement. LifeOS adds evidence
+ * provenance and combines lexical + dense retrieval without score-scale coupling.
  */
 public final class MemoryAlgorithms {
     public static final float MIN_SIMILARITY = 0.35f;
@@ -45,40 +46,51 @@ public final class MemoryAlgorithms {
                 && strengthNow(record, now) < DEAD_THRESHOLD;
     }
 
-    /** Semantic-first retrieval plus keyword fallback, de-duplicated by durable record id. */
+    /** Lexical + dense retrieval fused with Reciprocal Rank Fusion (k=60). */
     public static List<MemoryRecord> rank(List<MemoryRecord> pool, String query,
                                           float[] queryEmbedding, int topK) {
         if (pool == null || pool.isEmpty() || topK <= 0) return Collections.emptyList();
         String normalizedQuery = normalize(query);
         if (normalizedQuery.isEmpty() && queryEmbedding == null) return Collections.emptyList();
 
-        List<Scored> semantic = new ArrayList<Scored>();
+        List<MemoryRecord> lexical = new ArrayList<MemoryRecord>();
+        if (!normalizedQuery.isEmpty()) {
+            for (MemoryRecord record : pool) {
+                if (record == null) continue;
+                if (normalize(record.text).contains(normalizedQuery)) lexical.add(record);
+            }
+            Collections.sort(lexical, new Comparator<MemoryRecord>() {
+                @Override public int compare(MemoryRecord a, MemoryRecord b) {
+                    int strength = Float.compare(b.strength, a.strength);
+                    if (strength != 0) return strength;
+                    return Long.compare(b.lastAccessedAt, a.lastAccessedAt);
+                }
+            });
+        }
+
+        List<Scored> semanticScored = new ArrayList<Scored>();
         if (queryEmbedding != null) {
             for (MemoryRecord record : pool) {
                 if (record == null || record.embedding == null) continue;
                 float similarity = cosine(queryEmbedding, record.embedding);
-                if (similarity >= MIN_SIMILARITY) semantic.add(new Scored(record, similarity));
+                if (similarity >= MIN_SIMILARITY) semanticScored.add(new Scored(record, similarity));
             }
-            Collections.sort(semantic, new Comparator<Scored>() {
+            Collections.sort(semanticScored, new Comparator<Scored>() {
                 @Override public int compare(Scored a, Scored b) {
                     return Float.compare(b.score, a.score);
                 }
             });
         }
+        List<MemoryRecord> dense = new ArrayList<MemoryRecord>();
+        for (Scored scored : semanticScored) dense.add(scored.record);
 
-        LinkedHashMap<Long,MemoryRecord> merged = new LinkedHashMap<Long,MemoryRecord>();
-        for (Scored hit : semantic) merged.put(hit.record.id, hit.record);
-        if (!normalizedQuery.isEmpty()) {
-            for (MemoryRecord record : pool) {
-                if (record == null) continue;
-                String text = normalize(record.text);
-                if (text.contains(normalizedQuery)) merged.put(record.id, record);
-            }
-        }
-
+        List<RrfFusion.Fused<MemoryRecord>> fused = RrfFusion.fuse(
+                lexical, dense, new RrfFusion.Keyer<MemoryRecord>() {
+                    @Override public String key(MemoryRecord value) { return Long.toString(value.id); }
+                });
         List<MemoryRecord> out = new ArrayList<MemoryRecord>();
-        for (MemoryRecord record : merged.values()) {
-            out.add(record);
+        for (RrfFusion.Fused<MemoryRecord> hit : fused) {
+            out.add(hit.value);
             if (out.size() >= topK) break;
         }
         return out;
