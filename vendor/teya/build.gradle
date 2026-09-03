@@ -9,6 +9,7 @@ import java.security.MessageDigest
 
 ext.teyaRevision = 'b503872835ff3cafa8c399c4275e3e43c37d6577'
 ext.teyaGeneratedDir = layout.buildDirectory.dir('generated/upstreamAgentCore')
+ext.teyaGeneratedAssetsDir = layout.buildDirectory.dir('generated/upstreamAssets')
 ext.teyaAgentCore = [
     'com/teya/agent/brain/BrainClient.kt'                  : 'f629548896225fe483fb38872903f4bbd0ee092b',
     'com/teya/agent/brain/KtorClientFactory.kt'            : '7ed013eb150e649d79f72fd112931c40d73b83b4',
@@ -38,6 +39,12 @@ ext.teyaAgentCore = [
     'com/teya/agent/voice/WakeWordEngine.kt'                : 'ccb6170ac52da5dfd3a3bedadc4a039c53e40214',
     'com/teya/agent/voice/VoicePipeline.kt'                 : 'd04fe3faa7a892aa0efbf92d8498e16a6899972f',
 ]
+ext.teyaVoiceAssets = [
+    'aec_bridge.html' : '9f3c86b00153431c40f1e54ab6b2f199b5da3b45',
+    'hey_teya.json'   : 'e2e54ed9a4796883655b10b086f0d370ac90578c',
+    'hey_teya.tflite' : '123edcbd983efe43b1064d7b3e14f6493fff495c',
+    'silero_vad.onnx' : '80c5592ef1f4c9ede3e357bbd02eb863358a6a9d',
+]
 
 def gitBlobSha = { byte[] bytes ->
     MessageDigest digest = MessageDigest.getInstance('SHA-1')
@@ -65,6 +72,24 @@ tasks.register('syncTeyaAgentCore') {
     }
 }
 
+tasks.register('syncTeyaVoiceAssets') {
+    outputs.dir(teyaGeneratedAssetsDir)
+    doLast {
+        File root = teyaGeneratedAssetsDir.get().asFile
+        teyaVoiceAssets.each { fileName, expectedBlobSha ->
+            URL url = new URL("https://raw.githubusercontent.com/adgapar/teya/${teyaRevision}/app/src/main/assets/${fileName}")
+            byte[] bytes = url.bytes
+            String actualBlobSha = gitBlobSha(bytes)
+            if (actualBlobSha != expectedBlobSha) {
+                throw new GradleException("Teya asset integrity check failed for ${fileName}: expected ${expectedBlobSha}, got ${actualBlobSha}")
+            }
+            File target = new File(root, fileName)
+            target.parentFile.mkdirs()
+            target.bytes = bytes
+        }
+    }
+}
+
 android {
     namespace 'com.teya.vendor'
     compileSdk 35
@@ -85,6 +110,7 @@ android {
     sourceSets {
         main {
             java.srcDirs = ['upstream', teyaGeneratedDir]
+            assets.srcDirs = [teyaGeneratedAssetsDir]
             manifest.srcFile 'src/main/AndroidManifest.xml'
         }
     }
@@ -92,6 +118,7 @@ android {
 
 tasks.named('preBuild').configure {
     dependsOn tasks.named('syncTeyaAgentCore')
+    dependsOn tasks.named('syncTeyaVoiceAssets')
 }
 
 dependencies {
