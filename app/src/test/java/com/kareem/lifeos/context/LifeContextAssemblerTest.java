@@ -46,6 +46,14 @@ public class LifeContextAssemblerTest {
         assertEquals("Ahmed", snapshot.situations.get(0).title);
     }
 
+    @Test public void sameLabelAcrossSourcesDoesNotMergeWithoutCanonicalEvidence() {
+        List<RawObservation> xs = new ArrayList<RawObservation>();
+        xs.add(obs("chat", RawObservation.SourceKind.NOTIFICATION, "com.chat", "com.chat|ahmed", 1000L, "hello", null));
+        xs.add(obs("mail", RawObservation.SourceKind.EMAIL, "com.mail", "com.mail|ahmed", 2000L, "subject", null));
+        LifeContextSnapshot snapshot = LifeContextAssembler.rebuild(xs, 3000L);
+        assertEquals(2, snapshot.situations.size());
+    }
+
     @Test public void applicationIdentityAloneNeverMergesUnrelatedStreams() {
         List<RawObservation> xs = new ArrayList<RawObservation>();
         xs.add(obs("a", RawObservation.SourceKind.ACCESSIBILITY, "com.chat", "com.chat", 1000L, "", null));
