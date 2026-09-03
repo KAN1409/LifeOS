@@ -86,6 +86,15 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
         return out;
     }
 
+    /** Rebuilds the derived context from retained evidence; no derived state is authoritative. */
+    public synchronized LifeContextSnapshot rebuildContext(int observationLimit, long rebuiltAt) {
+        return LifeContextAssembler.rebuild(recent(observationLimit), rebuiltAt);
+    }
+
+    public synchronized LifeContextSnapshot rebuildContext(int observationLimit) {
+        return rebuildContext(observationLimit, System.currentTimeMillis());
+    }
+
     public synchronized int count() {
         Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM observations", null);
         try { return c.moveToFirst() ? c.getInt(0) : 0; }
