@@ -32,6 +32,8 @@ ext.teyaAgentCore = [
     'com/teya/agent/voice/speaker/SpeakerEmbedder.kt'       : '26a9e0491d918c3a6380a262a55439aad95d74a5',
     'com/teya/agent/voice/speaker/CamPlusPlusSpeakerEmbedder.kt': '868a6c84df229b6a2a8ddfb6387ebd9193120b68',
     'com/teya/agent/voice/speaker/Fbank.kt'                 : 'fee0eef2331c9fe20ff391ba136acfb867839b33',
+    'com/teya/agent/voice/vad/SileroVad.kt'                 : '897fe8ca2bfa23d32341fed67d54d92e1d6eea3e',
+    'com/teya/agent/voice/aec/WebViewAecHost.kt'            : '93bb549b91b9dd770a73e9d7ba5872688e8aff17',
 ]
 
 def gitBlobSha = { byte[] bytes ->
