@@ -4,6 +4,43 @@ plugins {
     id 'com.google.devtools.ksp'
 }
 
+import java.security.MessageDigest
+
+ext.teyaRevision = 'b503872835ff3cafa8c399c4275e3e43c37d6577'
+ext.teyaGeneratedDir = layout.buildDirectory.dir('generated/upstreamAgentCore')
+ext.teyaAgentCore = [
+    'com/teya/agent/brain/BrainClient.kt'      : 'f629548896225fe483fb38872903f4bbd0ee092b',
+    'com/teya/agent/persona/ToolSpec.kt'       : '164252a81bfc600ac3e0d349d70214d2c9e31b44',
+    'com/teya/agent/persona/AgentTools.kt'      : '1c82ca9c3d564cc823f8873d6b63cb03bde93196',
+    'com/teya/agent/persona/TeyaPersona.kt'     : 'd7d348d7f250efdc6f0ef547f34c7e0283af1a60',
+]
+
+def gitBlobSha = { byte[] bytes ->
+    MessageDigest digest = MessageDigest.getInstance('SHA-1')
+    digest.update("blob ${bytes.length}\u0000".getBytes('UTF-8'))
+    digest.update(bytes)
+    digest.digest().collect { String.format('%02x', it) }.join()
+}
+
+tasks.register('syncTeyaAgentCore') {
+    outputs.dir(teyaGeneratedDir)
+    doLast {
+        File root = teyaGeneratedDir.get().asFile
+        teyaAgentCore.each { relativePath, expectedBlobSha ->
+            String upstreamPath = "app/src/main/kotlin/${relativePath}"
+            URL url = new URL("https://raw.githubusercontent.com/adgapar/teya/${teyaRevision}/${upstreamPath}")
+            byte[] bytes = url.bytes
+            String actualBlobSha = gitBlobSha(bytes)
+            if (actualBlobSha != expectedBlobSha) {
+                throw new GradleException("Teya source integrity check failed for ${relativePath}: expected ${expectedBlobSha}, got ${actualBlobSha}")
+            }
+            File target = new File(root, relativePath)
+            target.parentFile.mkdirs()
+            target.bytes = bytes
+        }
+    }
+}
+
 android {
     namespace 'com.teya.vendor'
     compileSdk 35
@@ -23,14 +60,19 @@ android {
 
     sourceSets {
         main {
-            java.srcDirs = ['upstream']
+            java.srcDirs = ['upstream', teyaGeneratedDir]
             manifest.srcFile 'src/main/AndroidManifest.xml'
         }
     }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('syncTeyaAgentCore')
 }
 
 dependencies {
     implementation 'androidx.room:room-runtime:2.8.4'
     implementation 'androidx.room:room-ktx:2.8.4'
     ksp 'androidx.room:room-compiler:2.8.4'
+    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1'
 }
