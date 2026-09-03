@@ -10,6 +10,7 @@ import java.security.MessageDigest
 ext.teyaRevision = 'b503872835ff3cafa8c399c4275e3e43c37d6577'
 ext.teyaGeneratedDir = layout.buildDirectory.dir('generated/upstreamAgentCore')
 ext.teyaGeneratedAssetsDir = layout.buildDirectory.dir('generated/upstreamAssets')
+ext.teyaGeneratedResDir = layout.buildDirectory.dir('generated/upstreamRes')
 ext.teyaNativeCheckoutDir = layout.buildDirectory.dir('generated/upstreamNativeRepo')
 ext.teyaAgentCore = [
     'com/teya/agent/brain/BrainClient.kt'                  : 'f629548896225fe483fb38872903f4bbd0ee092b',
@@ -27,6 +28,8 @@ ext.teyaAgentCore = [
     'com/teya/agent/telephony/TelephonyActuator.kt'         : '529b128c10631a6f602c87cb882d2a6bb3d72bbb',
     'com/teya/agent/telephony/TeyaInCallService.kt'         : '529dffae097e81777ff4f39f30ad22d6bd3ad40a',
     'com/teya/agent/harness/ConfigManager.kt'               : '13f3138c5d55d6a5555cca910f74cc91285ffd68',
+    'com/teya/agent/harness/HarnessService.kt'              : '45d4b82ec8ec9310d7999ecc22f381bffe34a81c',
+    'com/teya/agent/timers/TimerManager.kt'                 : '4723227e0635cbfddf0285ee125e6373504f8b48',
     'com/teya/agent/household/ContactsRepository.kt'        : 'bc6c7a2284e8f1c2b521b55dfb4b838bab2b8724',
     'com/teya/agent/household/HouseholdManager.kt'          : 'aacd8346c71f6682626e8cbd9a07aec8c80baceb',
     'com/teya/agent/household/Languages.kt'                 : 'd06971968985a708905a0cb7095784e46066741c',
@@ -54,21 +57,23 @@ def gitBlobSha = { byte[] bytes ->
     digest.digest().collect { String.format('%02x', it) }.join()
 }
 
+def fetchVerified = { String upstreamPath, String expectedBlobSha, File target ->
+    URL url = new URL("https://raw.githubusercontent.com/adgapar/teya/${teyaRevision}/${upstreamPath}")
+    byte[] bytes = url.bytes
+    String actualBlobSha = gitBlobSha(bytes)
+    if (actualBlobSha != expectedBlobSha) {
+        throw new GradleException("Teya integrity check failed for ${upstreamPath}: expected ${expectedBlobSha}, got ${actualBlobSha}")
+    }
+    target.parentFile.mkdirs()
+    target.bytes = bytes
+}
+
 tasks.register('syncTeyaAgentCore') {
     outputs.dir(teyaGeneratedDir)
     doLast {
         File root = teyaGeneratedDir.get().asFile
         teyaAgentCore.each { relativePath, expectedBlobSha ->
-            String upstreamPath = "app/src/main/kotlin/${relativePath}"
-            URL url = new URL("https://raw.githubusercontent.com/adgapar/teya/${teyaRevision}/${upstreamPath}")
-            byte[] bytes = url.bytes
-            String actualBlobSha = gitBlobSha(bytes)
-            if (actualBlobSha != expectedBlobSha) {
-                throw new GradleException("Teya source integrity check failed for ${relativePath}: expected ${expectedBlobSha}, got ${actualBlobSha}")
-            }
-            File target = new File(root, relativePath)
-            target.parentFile.mkdirs()
-            target.bytes = bytes
+            fetchVerified("app/src/main/kotlin/${relativePath}", expectedBlobSha, new File(root, relativePath))
         }
     }
 }
@@ -78,16 +83,20 @@ tasks.register('syncTeyaVoiceAssets') {
     doLast {
         File root = teyaGeneratedAssetsDir.get().asFile
         teyaVoiceAssets.each { fileName, expectedBlobSha ->
-            URL url = new URL("https://raw.githubusercontent.com/adgapar/teya/${teyaRevision}/app/src/main/assets/${fileName}")
-            byte[] bytes = url.bytes
-            String actualBlobSha = gitBlobSha(bytes)
-            if (actualBlobSha != expectedBlobSha) {
-                throw new GradleException("Teya asset integrity check failed for ${fileName}: expected ${expectedBlobSha}, got ${actualBlobSha}")
-            }
-            File target = new File(root, fileName)
-            target.parentFile.mkdirs()
-            target.bytes = bytes
+            fetchVerified("app/src/main/assets/${fileName}", expectedBlobSha, new File(root, fileName))
         }
+    }
+}
+
+tasks.register('syncTeyaHarnessResources') {
+    outputs.dir(teyaGeneratedResDir)
+    doLast {
+        File root = teyaGeneratedResDir.get().asFile
+        fetchVerified(
+            'app/src/main/res/drawable/ic_launcher_foreground.xml',
+            'd9b28d853db4f65f5e90232d469d893f9f075853',
+            new File(root, 'drawable/ic_launcher_foreground.xml')
+        )
     }
 }
 
@@ -119,7 +128,7 @@ tasks.register('syncTeyaNativeMicrofrontend') {
 }
 
 android {
-    namespace 'com.teya.vendor'
+    namespace 'com.teya.agent'
     compileSdk 35
     ndkVersion '27.3.13750724'
 
@@ -150,6 +159,7 @@ android {
         main {
             java.srcDirs = ['upstream', teyaGeneratedDir]
             assets.srcDirs = [teyaGeneratedAssetsDir]
+            res.srcDirs = [teyaGeneratedResDir]
             manifest.srcFile 'src/main/AndroidManifest.xml'
         }
     }
@@ -158,10 +168,12 @@ android {
 tasks.named('preBuild').configure {
     dependsOn tasks.named('syncTeyaAgentCore')
     dependsOn tasks.named('syncTeyaVoiceAssets')
+    dependsOn tasks.named('syncTeyaHarnessResources')
     dependsOn tasks.named('syncTeyaNativeMicrofrontend')
 }
 
 dependencies {
+    implementation 'androidx.core:core-ktx:1.15.0'
     implementation 'androidx.room:room-runtime:2.8.4'
     implementation 'androidx.room:room-ktx:2.8.4'
     implementation 'androidx.security:security-crypto:1.1.0'
