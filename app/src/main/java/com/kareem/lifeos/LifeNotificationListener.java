@@ -4,6 +4,10 @@ import android.app.Notification;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import com.kareem.lifeos.context.NotificationCapture;
+import com.kareem.lifeos.context.NotificationObservationAdapter;
+import com.kareem.lifeos.context.RawObservation;
+import com.kareem.lifeos.context.UniversalObservationStore;
 import com.kareem.lifeos.engine.NotificationUnderstandingProbe;
 import java.util.List;
 import java.util.Locale;
@@ -13,6 +17,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 public final class LifeNotificationListener extends NotificationListenerService {
+    private static final NotificationObservationAdapter V2_ADAPTER=new NotificationObservationAdapter();
+
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
         if(sbn==null||sbn.isOngoing()||sbn.getNotification()==null)return;
         Notification n=sbn.getNotification();Bundle e=n.extras;
@@ -23,12 +29,19 @@ public final class LifeNotificationListener extends NotificationListenerService 
         String thread=app+"|"+(conversation.isEmpty()?title:conversation).toLowerCase(Locale.ROOT).trim();
         String base=sbn.getKey()==null?app+"|"+sbn.getId()+"|"+sbn.getPostTime():sbn.getKey();CharSequence[] lines=e.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
         try(LifeDb db=new LifeDb(this)){
-            boolean hadLine=false;Set<String> seen=new HashSet<String>();if(lines!=null&&lines.length>0){for(int i=0;i<lines.length;i++){String line=text(lines[i]);String normalized=line.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");if(line.isEmpty()||!seen.add(normalized))continue;hadLine=true;store(db,base+"|line|"+i+"|"+sha(line),app,title,line,thread,sbn.getPostTime());}}
-            if(!hadLine)store(db,base+"|body|"+sha(body),app,title,body,thread,sbn.getPostTime());
+            boolean hadLine=false;Set<String> seen=new HashSet<String>();if(lines!=null&&lines.length>0){for(int i=0;i<lines.length;i++){String line=text(lines[i]);String normalized=line.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");if(line.isEmpty()||!seen.add(normalized))continue;hadLine=true;store(db,base+"|line|"+i+"|"+sha(line),app,title,conversation,line,thread,sbn.getPostTime());}}
+            if(!hadLine)store(db,base+"|body|"+sha(body),app,title,conversation,body,thread,sbn.getPostTime());
         }
     }
-    private boolean store(LifeDb db,String key,String app,String title,String body,String thread,long at){
+
+    private boolean store(LifeDb db,String key,String app,String title,String conversation,String body,String thread,long at){
         if(isSensitive(title+" "+body)||CapturePolicy.isNotificationSummary(body))return false;
+
+        // V2 shadow path: preserve source facts before semantic interpretation.
+        RawObservation raw=V2_ADAPTER.adapt(new NotificationCapture(key,app,title,conversation,body,at));
+        UniversalObservationStore.get(this).append(raw);
+
+        // Existing M1 path remains intact until V2 proves equivalent/better.
         NotificationUnderstandingProbe.observe(this,thread,body,at,key);
         long id=db.upsertEvent(key,app,title,body,thread,at);
         if(id>0){List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(title,body,System.currentTimeMillis());for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);return true;}return false;
