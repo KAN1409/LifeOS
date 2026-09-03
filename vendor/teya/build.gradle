@@ -24,6 +24,10 @@ ext.teyaAgentCore = [
     'com/teya/agent/safety/ContactAllowlistManager.kt'      : 'e3069f958285f69e21487615366efefe74c53cfb',
     'com/teya/agent/telephony/TelephonyActuator.kt'         : '529b128c10631a6f602c87cb882d2a6bb3d72bbb',
     'com/teya/agent/telephony/TeyaInCallService.kt'         : '529dffae097e81777ff4f39f30ad22d6bd3ad40a',
+    'com/teya/agent/harness/ConfigManager.kt'               : '13f3138c5d55d6a5555cca910f74cc91285ffd68',
+    'com/teya/agent/household/ContactsRepository.kt'        : 'bc6c7a2284e8f1c2b521b55dfb4b838bab2b8724',
+    'com/teya/agent/household/HouseholdManager.kt'          : 'aacd8346c71f6682626e8cbd9a07aec8c80baceb',
+    'com/teya/agent/household/Languages.kt'                 : 'd06971968985a708905a0cb7095784e46066741c',
 ]
 
 def gitBlobSha = { byte[] bytes ->
@@ -84,6 +88,7 @@ tasks.named('preBuild').configure {
 dependencies {
     implementation 'androidx.room:room-runtime:2.8.4'
     implementation 'androidx.room:room-ktx:2.8.4'
+    implementation 'androidx.security:security-crypto:1.1.0'
     ksp 'androidx.room:room-compiler:2.8.4'
 
     implementation 'io.ktor:ktor-client-core:2.3.12'
