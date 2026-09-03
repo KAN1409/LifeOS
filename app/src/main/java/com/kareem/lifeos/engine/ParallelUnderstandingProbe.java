@@ -11,6 +11,7 @@ public final class ParallelUnderstandingProbe {
     private static volatile RawScreenSnapshot lastSnapshot;
     private static volatile ScreenState lastState=new ScreenState(ScreenState.Type.UNKNOWN,0.0);
     private static volatile List<StructuralElement> lastElements=Collections.emptyList();
+    private static volatile List<BubbleCandidate> lastBubbles=Collections.emptyList();
 
     private ParallelUnderstandingProbe(){}
 
@@ -18,9 +19,11 @@ public final class ParallelUnderstandingProbe {
         lastSnapshot=snapshot;
         lastState=StructuralScreenClassifier.classify(snapshot);
         lastElements=StructuralElementExtractor.extract(snapshot);
+        lastBubbles=BubbleClusterer.cluster(snapshot,lastElements);
     }
 
     public static RawScreenSnapshot lastSnapshot(){return lastSnapshot;}
     public static ScreenState lastState(){return lastState;}
     public static List<StructuralElement> lastElements(){return lastElements;}
+    public static List<BubbleCandidate> lastBubbles(){return lastBubbles;}
 }
