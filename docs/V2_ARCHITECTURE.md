@@ -11,6 +11,7 @@ LifeOS V2 evolves the existing Android application; it is not a rewrite.
 5. Action execution is downstream of understanding and requires an explicit policy/approval boundary.
 6. Inferred identities are source-scoped. Cross-source identity requires explicit canonical evidence; matching display names alone are never sufficient.
 7. Semantic Life Model state is a projection over evidence-backed revisions; newer interpretations never erase historical evidence.
+8. Semantic assertions are derived artifacts. They never live inside or mutate `RawObservation`.
 
 ## Pipeline
 
@@ -19,11 +20,14 @@ Android sources
   -> ObservationAdapter
   -> RawObservation
   -> durable observation store
-  -> normalization / reconciliation
-  -> ContextEvent
-  -> Episode
-  -> Situation
-  -> Life Model (temporal facts + current projection)
+  -> Context Engine
+      -> ContextEvent
+      -> Episode
+      -> Situation
+  -> SemanticInterpreter
+      -> SemanticAssertion
+      -> deterministic semantic replay
+  -> Life Model (temporal fact history + current projection)
   -> Deep Brain / decision engine
   -> proposed action
   -> policy + approval
@@ -55,9 +59,13 @@ Current conservative rules:
 - matching names across different sources never merge unless a canonical entity ID is supplied.
 
 ### V2.3 Life Model — implemented foundation
-`LifeFact` provides evidence-backed semantic revisions with subject, predicate, value, assertion/retraction state, observation time, validity interval, confidence, and evidence IDs. `LifeModelAssembler` consumes only explicit normalized `life_fact_*` attributes; it never reparses WhatsApp/UI/source text. It retains the complete fact history and derives `currentFacts` as a rebuildable projection, so later revisions/retractions do not destroy history. The universal store can rebuild context and the Life Model from the same retained evidence set.
+`SemanticInterpreter` is now the replaceable semantic boundary. It receives immutable `RawObservation` evidence and emits `SemanticAssertion` objects with explicit provenance. `SemanticReplayEngine` deterministically recomputes those assertions whenever the semantic engine changes.
 
-Next V2.3 work is semantic extraction/enrichment that can emit normalized facts for people, projects, commitments, open loops, appointments and relationships without source-specific patches.
+`LifeFact` stores evidence-backed semantic revisions with subject, predicate, value, assertion/retraction state, observation time, validity interval, confidence, and evidence IDs. `LifeModelAssembler` consumes semantic assertions only; it never reparses source text or reads semantic meaning from raw capture attributes. It retains the complete fact history and derives `currentFacts` as a rebuildable projection, so later revisions/retractions do not destroy history.
+
+The universal store can rebuild context from retained raw evidence and, when given a semantic interpreter, replay semantics and rebuild the Life Model from the same evidence set.
+
+Next V2.3 work is a general semantic enrichment implementation for people, projects, commitments, open loops, appointments and relationships. That interpreter must remain source-neutral and return zero assertions when evidence is insufficient.
 
 ### V2.4 Deep Brain
 Situation ranking, options, decisions, reflection, checkpoints, and idempotent agent execution.
