@@ -12,6 +12,8 @@ LifeOS V2 evolves the existing Android application; it is not a rewrite.
 6. Inferred identities are source-scoped. Cross-source identity requires explicit canonical evidence; matching display names alone are never sufficient.
 7. Semantic Life Model state is a projection over evidence-backed revisions; newer interpretations never erase historical evidence.
 8. Semantic assertions are derived artifacts. They never live inside or mutate `RawObservation`.
+9. Deep Brain outputs are proposals, not truth: priorities must reference existing situations and evidence before they are surfaced.
+10. External writes require explicit approval and an idempotency reservation before any side effect.
 
 ## Pipeline
 
@@ -28,10 +30,14 @@ Android sources
       -> SemanticAssertion
       -> deterministic semantic replay
   -> Life Model (temporal fact history + current projection)
-  -> Deep Brain / decision engine
-  -> proposed action
-  -> policy + approval
-  -> Android Action Engine
+  -> Grounded Deep Brain
+      -> validated PriorityDecision
+      -> suggested ActionProposal
+  -> SafeActionEngine
+      -> grounding check
+      -> approval policy
+      -> persistent idempotency reservation
+  -> Android ActionExecutor
   -> outcome observation
 ```
 
@@ -59,19 +65,33 @@ Current conservative rules:
 - matching names across different sources never merge unless a canonical entity ID is supplied.
 
 ### V2.3 Life Model — implemented foundation
-`SemanticInterpreter` is now the replaceable semantic boundary. It receives immutable `RawObservation` evidence and emits `SemanticAssertion` objects with explicit provenance. `SemanticReplayEngine` deterministically recomputes those assertions whenever the semantic engine changes.
+`SemanticInterpreter` is the replaceable semantic boundary. It receives immutable `RawObservation` evidence and emits `SemanticAssertion` objects with explicit provenance. `SemanticReplayEngine` deterministically recomputes those assertions whenever the semantic engine changes.
 
-`LifeFact` stores evidence-backed semantic revisions with subject, predicate, value, assertion/retraction state, observation time, validity interval, confidence, and evidence IDs. `LifeModelAssembler` consumes semantic assertions only; it never reparses source text or reads semantic meaning from raw capture attributes. It retains the complete fact history and derives `currentFacts` as a rebuildable projection, so later revisions/retractions do not destroy history.
+`GroundedSemanticInterpreter` wraps model-based semantic clients and rejects proposed assertions that do not cite the current observation, have an invented observation time, or lack a semantic predicate.
+
+`LifeFact` stores evidence-backed semantic revisions with subject, predicate, value, assertion/retraction state, observation time, validity interval, confidence, and evidence IDs. `LifeModelAssembler` consumes semantic assertions only; it never reparses source text or reads semantic meaning from raw capture attributes. It retains complete fact history and derives `currentFacts` as a rebuildable projection.
 
 The universal store can rebuild context from retained raw evidence and, when given a semantic interpreter, replay semantics and rebuild the Life Model from the same evidence set.
 
-Next V2.3 work is a general semantic enrichment implementation for people, projects, commitments, open loops, appointments and relationships. That interpreter must remain source-neutral and return zero assertions when evidence is insufficient.
+### V2.4 Deep Brain — implemented safety foundation
+`DeepBrainClient` is a replaceable model/transport boundary. `GroundedDeepBrain` validates every proposed priority before it can surface: request IDs must match, referenced situations must exist in the Life Model, all cited evidence must actually belong to those situations, and invalid outputs are discarded. Accepted decisions are deterministically re-ranked.
 
-### V2.4 Deep Brain
-Situation ranking, options, decisions, reflection, checkpoints, and idempotent agent execution.
+Next V2.4 work is the actual authorized Deep Brain transport plus richer decision checkpoints/reflection. The transport must remain replaceable; the Android data model must not depend on a specific model vendor.
 
-### V2.5 Action Engine
-Accessibility-driven structured Android actions behind policy and approval gates.
+### V2.5 Action Engine — safety boundary implemented; Android executor next
+`ActionProposal`, `ActionApproval`, `SafeActionEngine`, `ActionExecutor`, and execution results separate proposing an action from performing it. Every non-read-only action requires explicit matching approval. Every proposal must be grounded in a real situation/evidence set.
+
+Idempotency is reserved before execution. `PersistentActionLedger` stores reservations in SQLite so retries or process restarts cannot silently repeat the same side effect.
+
+No production Android UI automation is wired yet. The next implementation is a typed Android `ActionExecutor`, inspired by permissively licensed accessibility/action-engine patterns, behind these existing policy gates. Execution outcomes should then be captured back as observations so the loop can verify results rather than assume success.
+
+## Next integration sequence
+
+1. Implement a source-neutral semantic enrichment client that can return zero assertions when evidence is insufficient.
+2. Implement the authorized Deep Brain transport behind `DeepBrainClient`.
+3. Add persistent decision/action outcome logging and checkpoint recovery.
+4. Implement typed Android read actions first, then approval-gated reversible writes through `ActionExecutor`.
+5. Feed action outcomes back into `RawObservation` so every plan becomes observe -> act -> observe, not fire-and-forget.
 
 ## Non-goal
 
