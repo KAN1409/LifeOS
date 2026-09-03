@@ -56,8 +56,6 @@ public final class ObservationDeduplicator {
         }
         double similarity = jaccard(prior.tokens, current.tokens);
         if (similarity >= nearDuplicateThreshold) {
-            // Advance state just like SecondBrain advances duplicate-frame state,
-            // preventing repeated comparison against a stale snapshot.
             previous.put(key, current);
             return new Decision(false, Gate.NEAR_DUPLICATE, similarity);
         }
@@ -69,8 +67,11 @@ public final class ObservationDeduplicator {
 
     static String normalize(String value) {
         if (value == null) return "";
+        // Lowercase first, so volatile JSON field matching must use lowercase names.
+        // Replacing the whole field with one stable token means timestamp-only accessibility
+        // snapshots collapse to the same exact fingerprint rather than merely a near-duplicate.
         return value.toLowerCase(Locale.ROOT)
-                .replaceAll("\\\"(?:capturedAt|timestamp|observedAt)\\\"\\s*:\\s*\\d+", "\"time\":0")
+                .replaceAll("\\\"(?:capturedat|timestamp|observedat)\\\"\\s*:\\s*\\d+", "\"time\":0")
                 .replaceAll("\\s+", " ").trim();
     }
 
