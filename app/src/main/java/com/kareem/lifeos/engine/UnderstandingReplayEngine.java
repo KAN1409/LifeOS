@@ -14,8 +14,15 @@ public final class UnderstandingReplayEngine {
         if(context==null)return Collections.emptyList();
         PersistentUnderstandingStore store=PersistentUnderstandingStore.get(context);
         List<CanonicalEvent> rebuilt=rebuild(store.loadRawEvidence());
-        store.replaceCanonical(rebuilt);
+        store.replaceCanonical(rebuilt,UnderstandingEngineVersion.CURRENT,System.currentTimeMillis());
         return rebuilt;
+    }
+
+    public static boolean replayIfNeeded(Context context){
+        if(context==null)return false;
+        PersistentUnderstandingStore store=PersistentUnderstandingStore.get(context);
+        if(!store.needsReplay())return false;
+        replay(context);return true;
     }
 
     public static List<CanonicalEvent> rebuild(List<PersistentRawEvidence> raw){
@@ -39,14 +46,6 @@ public final class UnderstandingReplayEngine {
 
     private static List<MessageObservation> dedupeScreen(List<MessageObservation> input){
         List<MessageObservation> out=new ArrayList<MessageObservation>();
-        for(MessageObservation m:input){
-            boolean duplicate=false;
-            for(int i=out.size()-1;i>=0;i--){
-                MessageObservation prior=out.get(i);long dt=Math.abs(prior.observedAt-m.observedAt);if(dt>30000L)break;
-                if(prior.direction==m.direction&&ReconciliationKey.normalize(prior.text).equals(ReconciliationKey.normalize(m.text))){duplicate=true;break;}
-            }
-            if(!duplicate)out.add(m);
-        }
-        return out;
+        for(MessageObservation m:input){boolean duplicate=false;for(int i=out.size()-1;i>=0;i--){MessageObservation prior=out.get(i);long dt=Math.abs(prior.observedAt-m.observedAt);if(dt>30000L)break;if(prior.direction==m.direction&&ReconciliationKey.normalize(prior.text).equals(ReconciliationKey.normalize(m.text))){duplicate=true;break;}}if(!duplicate)out.add(m);}return out;
     }
 }
