@@ -46,9 +46,14 @@ public final class StructuralElementExtractor {
         if(topBand&&n.clickable&&compact)return StructuralElement.Role.TOP_BAR;
         if(bottomBand&&n.clickable&&!n.editable&&compact)return StructuralElement.Role.ACTION;
 
-        // A marker is deliberately constrained to compact, narrow, centered passive content.
-        // Wide centered content remains a message candidate instead of being hidden by textual rules.
-        if(middleBand&&nearCenter&&n.hasText()&&!n.clickable&&!n.editable&&markerNarrow&&compact){
+        RawNode parent=findNode(s,n.parentId);
+        boolean directHistoryChild=parent!=null&&parent.scrollable;
+        boolean insideVisualContainer=parent!=null&&!parent.scrollable&&!parent.editable&&
+                parent.width()>=n.width()&&parent.height()>=n.height();
+
+        // Center markers are narrow passive labels directly in the history flow.
+        // A centered text node inside its own visual container remains a message candidate.
+        if(middleBand&&nearCenter&&n.hasText()&&!n.clickable&&!n.editable&&markerNarrow&&compact&&directHistoryChild&&!insideVisualContainer){
             return StructuralElement.Role.CENTER_MARKER;
         }
 
@@ -58,14 +63,20 @@ public final class StructuralElementExtractor {
         return StructuralElement.Role.OTHER;
     }
 
+    private static RawNode findNode(RawScreenSnapshot s,int id){
+        if(id<0)return null;
+        for(RawNode n:s.nodes)if(n.id==id)return n;
+        return null;
+    }
+
     private static double confidence(StructuralElement.Role role,RawNode n,RawScreenSnapshot s){
         switch(role){
             case SCROLL_REGION:return n.scrollable?0.96:0.70;
             case COMPOSER:return n.editable?0.97:0.70;
             case TOP_BAR:return 0.78;
             case ACTION:return 0.82;
-            case CENTER_MARKER:return 0.76;
-            case MESSAGE_CANDIDATE:return 0.70;
+            case CENTER_MARKER:return 0.80;
+            case MESSAGE_CANDIDATE:return 0.72;
             default:return 0.40;
         }
     }
