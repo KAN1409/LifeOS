@@ -68,6 +68,78 @@ def fetchVerified = { String upstreamPath, String expectedBlobSha, File target -
     target.bytes = bytes
 }
 
+def patchHarnessForLifeOsApproval = { File harness ->
+    String text = harness.getText('UTF-8')
+
+    String constantAnchor = '        const val ACTION_TOGGLE_TOUCH_MODE = "com.teya.agent.action.TOGGLE_TOUCH_MODE"'
+    String constantPatch = '''        const val ACTION_APPROVAL_REQUEST = "com.kareem.lifeos.TEYA_APPROVAL_REQUEST"
+        const val ACTION_EXECUTE_APPROVED = "com.kareem.lifeos.TEYA_EXECUTE_APPROVED"
+        const val ACTION_EXECUTION_RESULT = "com.kareem.lifeos.TEYA_EXECUTION_RESULT"
+        const val EXTRA_TOOL_CALL_ID = "tool_call_id"
+        const val EXTRA_TOOL_NAME = "tool_name"
+        const val EXTRA_TOOL_ARGS = "tool_args"
+        const val EXTRA_TOOL_RESULT = "tool_result"
+        const val EXTRA_TOOL_OK = "tool_ok"
+        const val ACTION_TOGGLE_TOUCH_MODE = "com.teya.agent.action.TOGGLE_TOUCH_MODE"'''
+    if (!text.contains(constantAnchor)) throw new GradleException('Teya Harness approval patch: constants anchor missing')
+    text = text.replace(constantAnchor, constantPatch)
+
+    String startAnchor = '''            ACTION_TOGGLE_TOUCH_MODE -> {
+                configManager.touchModeEnabled = !configManager.touchModeEnabled'''
+    String startPatch = '''            ACTION_EXECUTE_APPROVED -> {
+                val callId = intent.getStringExtra(EXTRA_TOOL_CALL_ID).orEmpty()
+                val toolName = intent.getStringExtra(EXTRA_TOOL_NAME).orEmpty()
+                val rawArgs = intent.getStringExtra(EXTRA_TOOL_ARGS).orEmpty()
+                scope.launch {
+                    var ok = true
+                    val result = try {
+                        val json = org.json.JSONObject(rawArgs.ifBlank { "{}" })
+                        val args = mutableMapOf<String, String>()
+                        val keys = json.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            args[key] = json.optString(key, "")
+                        }
+                        executeToolUnsafe(ToolCall(callId, toolName, args))
+                    } catch (t: Throwable) {
+                        ok = false
+                        "Execution failed: ${t.message ?: t.javaClass.simpleName}"
+                    }
+                    sendBroadcast(Intent(ACTION_EXECUTION_RESULT).apply {
+                        setPackage(packageName)
+                        putExtra(EXTRA_TOOL_CALL_ID, callId)
+                        putExtra(EXTRA_TOOL_NAME, toolName)
+                        putExtra(EXTRA_TOOL_RESULT, result)
+                        putExtra(EXTRA_TOOL_OK, ok)
+                    })
+                }
+            }
+            ACTION_TOGGLE_TOUCH_MODE -> {
+                configManager.touchModeEnabled = !configManager.touchModeEnabled'''
+    if (!text.contains(startAnchor)) throw new GradleException('Teya Harness approval patch: start-command anchor missing')
+    text = text.replace(startAnchor, startPatch)
+
+    String executeAnchor = '    private suspend fun executeTool(tool: ToolCall): String = when (tool.functionName) {'
+    String executePatch = '''    private val lifeOsReadOnlyTools = setOf("get_events", "read_shopping_list", "query_expenses")
+
+    private suspend fun executeTool(tool: ToolCall): String {
+        if (lifeOsReadOnlyTools.contains(tool.functionName)) return executeToolUnsafe(tool)
+        sendBroadcast(Intent(ACTION_APPROVAL_REQUEST).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_TOOL_CALL_ID, tool.id)
+            putExtra(EXTRA_TOOL_NAME, tool.functionName)
+            putExtra(EXTRA_TOOL_ARGS, org.json.JSONObject(tool.arguments).toString())
+        })
+        return "This action is waiting for approval in LifeOS Action Center."
+    }
+
+    private suspend fun executeToolUnsafe(tool: ToolCall): String = when (tool.functionName) {'''
+    if (!text.contains(executeAnchor)) throw new GradleException('Teya Harness approval patch: executeTool anchor missing')
+    text = text.replace(executeAnchor, executePatch)
+
+    harness.setText(text, 'UTF-8')
+}
+
 tasks.register('syncTeyaAgentCore') {
     outputs.dir(teyaGeneratedDir)
     doLast {
@@ -75,6 +147,9 @@ tasks.register('syncTeyaAgentCore') {
         teyaAgentCore.each { relativePath, expectedBlobSha ->
             fetchVerified("app/src/main/kotlin/${relativePath}", expectedBlobSha, new File(root, relativePath))
         }
+        // The upstream blob is verified first, then a deterministic LifeOS-only approval hook is
+        // applied to the generated build copy. Upstream source remains pinned and auditable.
+        patchHarnessForLifeOsApproval(new File(root, 'com/teya/agent/harness/HarnessService.kt'))
     }
 }
 
@@ -185,7 +260,6 @@ dependencies {
     implementation 'io.ktor:ktor-client-logging:2.3.12'
     implementation 'io.ktor:ktor-client-websockets:2.3.12'
     implementation 'io.ktor:ktor-serialization-kotlinx-json:2.3.12'
-    implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1'
     implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.22.0'
     implementation 'com.google.ai.edge.litert:litert:1.4.1'
 }
