@@ -10,17 +10,20 @@ import java.security.MessageDigest
 ext.teyaRevision = 'b503872835ff3cafa8c399c4275e3e43c37d6577'
 ext.teyaGeneratedDir = layout.buildDirectory.dir('generated/upstreamAgentCore')
 ext.teyaAgentCore = [
-    'com/teya/agent/brain/BrainClient.kt'             : 'f629548896225fe483fb38872903f4bbd0ee092b',
-    'com/teya/agent/brain/KtorClientFactory.kt'       : '7ed013eb150e649d79f72fd112931c40d73b83b4',
-    'com/teya/agent/brain/MistralClient.kt'           : '729e5d60475b7c57ce46a340552251e6d4dfb075',
-    'com/teya/agent/brain/MistralModels.kt'           : 'ae55b6067d71e38310defda5229235c35374fd70',
-    'com/teya/agent/brain/MistralVoices.kt'           : 'f9a233ec7a1bd3c1ec1021b581c43d18c6385ddd',
-    'com/teya/agent/persona/ToolSpec.kt'              : '164252a81bfc600ac3e0d349d70214d2c9e31b44',
-    'com/teya/agent/persona/AgentTools.kt'             : '1c82ca9c3d564cc823f8873d6b63cb03bde93196',
-    'com/teya/agent/persona/TeyaPersona.kt'            : 'd7d348d7f250efdc6f0ef547f34c7e0283af1a60',
-    'com/teya/agent/calendar/CalendarManager.kt'       : 'dc20cf04cf0488a58af167285ccea2fec8338009',
-    'com/teya/agent/shopping/ShoppingListManager.kt'   : 'e1e244cd3e936475433d253e99e18882e846c0be',
-    'com/teya/agent/expenses/ExpenseManager.kt'        : '9b99ab9e291df8760a855a5c61ec9309862edd53',
+    'com/teya/agent/brain/BrainClient.kt'                  : 'f629548896225fe483fb38872903f4bbd0ee092b',
+    'com/teya/agent/brain/KtorClientFactory.kt'            : '7ed013eb150e649d79f72fd112931c40d73b83b4',
+    'com/teya/agent/brain/MistralClient.kt'                : '729e5d60475b7c57ce46a340552251e6d4dfb075',
+    'com/teya/agent/brain/MistralModels.kt'                : 'ae55b6067d71e38310defda5229235c35374fd70',
+    'com/teya/agent/brain/MistralVoices.kt'                : 'f9a233ec7a1bd3c1ec1021b581c43d18c6385ddd',
+    'com/teya/agent/persona/ToolSpec.kt'                   : '164252a81bfc600ac3e0d349d70214d2c9e31b44',
+    'com/teya/agent/persona/AgentTools.kt'                  : '1c82ca9c3d564cc823f8873d6b63cb03bde93196',
+    'com/teya/agent/persona/TeyaPersona.kt'                 : 'd7d348d7f250efdc6f0ef547f34c7e0283af1a60',
+    'com/teya/agent/calendar/CalendarManager.kt'            : 'dc20cf04cf0488a58af167285ccea2fec8338009',
+    'com/teya/agent/shopping/ShoppingListManager.kt'        : 'e1e244cd3e936475433d253e99e18882e846c0be',
+    'com/teya/agent/expenses/ExpenseManager.kt'             : '9b99ab9e291df8760a855a5c61ec9309862edd53',
+    'com/teya/agent/safety/ContactAllowlistManager.kt'      : 'e3069f958285f69e21487615366efefe74c53cfb',
+    'com/teya/agent/telephony/TelephonyActuator.kt'         : '529b128c10631a6f602c87cb882d2a6bb3d72bbb',
+    'com/teya/agent/telephony/TeyaInCallService.kt'         : '529dffae097e81777ff4f39f30ad22d6bd3ad40a',
 ]
 
 def gitBlobSha = { byte[] bytes ->
