@@ -95,6 +95,17 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
         return rebuildContext(observationLimit, System.currentTimeMillis());
     }
 
+    /** Rebuilds both context and the temporal semantic Life Model from the same evidence set. */
+    public synchronized LifeModelSnapshot rebuildLifeModel(int observationLimit, long rebuiltAt) {
+        List<RawObservation> evidence = recent(observationLimit);
+        LifeContextSnapshot context = LifeContextAssembler.rebuild(evidence, rebuiltAt);
+        return LifeModelAssembler.rebuild(evidence, context, rebuiltAt);
+    }
+
+    public synchronized LifeModelSnapshot rebuildLifeModel(int observationLimit) {
+        return rebuildLifeModel(observationLimit, System.currentTimeMillis());
+    }
+
     public synchronized int count() {
         Cursor c = getReadableDatabase().rawQuery("SELECT COUNT(*) FROM observations", null);
         try { return c.moveToFirst() ? c.getInt(0) : 0; }
