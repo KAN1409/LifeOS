@@ -46,7 +46,7 @@ public final class MainActivity extends Activity {
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
         LinearLayout top=new LinearLayout(this);top.setOrientation(LinearLayout.VERTICAL);top.setPadding(dp(16),dp(18),dp(16),dp(14));top.setBackgroundColor(SURFACE);
         TextView title=text("LifeOS",22,TEXT);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);top.addView(title);
-        TextView subtitle=text("V2 Agent Runtime · Teya transplant + SecondBrain intelligence",12,MUTED);subtitle.setPadding(0,dp(2),0,0);top.addView(subtitle);
+        TextView subtitle=text("V2 Agent Runtime · Teya + SecondBrain + Graphiti",12,MUTED);subtitle.setPadding(0,dp(2),0,0);top.addView(subtitle);
         root.addView(top,new LinearLayout.LayoutParams(-1,-2));root.addView(divider());
 
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(16),dp(14),dp(16),0);
@@ -66,6 +66,7 @@ public final class MainActivity extends Activity {
         Button talk=primary("Talk now");talk.setOnClickListener(v->prepareAgent("talk"));
         agentActions.addView(configure,new LinearLayout.LayoutParams(0,dp(42),1));LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,dp(42),1);ap.setMargins(dp(7),0,0,0);agentActions.addView(start,ap);LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(42),1);tp.setMargins(dp(7),0,0,0);agentActions.addView(talk,tp);agent.addView(agentActions);
         Button intelligence=secondary("Life Intelligence  →");intelligence.setOnClickListener(v->startActivity(new Intent(this,SecondBrainActivity.class)));LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,dp(44));ip.setMargins(0,dp(9),0,0);agent.addView(intelligence,ip);
+        Button signals=secondary("Life Signals · Social Radar + Decisions  →");signals.setOnClickListener(v->startActivity(new Intent(this,LifeSignalsActivity.class)));LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,dp(44));sp.setMargins(0,dp(8),0,0);agent.addView(signals,sp);
         body.addView(agent);
         root.addView(body,new LinearLayout.LayoutParams(-1,-2));
 
@@ -102,7 +103,7 @@ public final class MainActivity extends Activity {
         boolean enabled=notifications!=null&&notifications.contains(getPackageName()),screen=services!=null&&services.contains(getPackageName()+"/"+LifeScreenContextService.class.getName());
         PersistentUnderstandingStore u=PersistentUnderstandingStore.get(this);String version=u.canonicalEngineVersion();if(blank(version))version="pending";
         int raw=UniversalObservationStore.get(this).count(),memories=PersistentLifeMemoryStore.get(this).searchable().size();boolean brain=new ConfigManager(this).isConfigured();
-        status.setText((enabled?"●":"○")+" notifications   "+(screen?"●":"○")+" screen context   "+(brain?"●":"○")+" agent brain\n"+raw+" raw observations  ·  "+memories+" grounded memories  ·  "+db.count("open_loops")+" attention items\nengine "+version+"  ·  Teya Harness imported  ·  SecondBrain client ready");
+        status.setText((enabled?"●":"○")+" notifications   "+(screen?"●":"○")+" screen context   "+(brain?"●":"○")+" agent brain\n"+raw+" raw observations  ·  "+memories+" grounded memories  ·  "+db.count("open_loops")+" attention items\nengine "+version+"  ·  Teya Harness imported  ·  SecondBrain + Graphiti clients ready");
         status.setTextColor(enabled||screen||brain?GREEN:MUTED);showRecent();
     }
 
