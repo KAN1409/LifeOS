@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Life Thread: scattered moments converge into one local memory core. -->
+    <path android:fillColor="@android:color/transparent"
+        android:strokeColor="#B8E24A" android:strokeWidth="7"
+        android:strokeLineCap="round" android:strokeLineJoin="round"
+        android:pathData="M27,29 C27,45 39,45 39,55 C39,66 29,66 29,79 M39,55 C48,55 49,47 57,47 C67,47 67,62 78,62 M57,47 C57,37 66,31 78,31" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M57,38 A9,9 0,1 1,56.9,38" />
+    <path android:fillColor="#B8E24A"
+        android:pathData="M27,23 A6,6 0,1 1,26.9,23 M29,73 A6,6 0,1 1,28.9,73 M78,25 A6,6 0,1 1,77.9,25 M78,56 A6,6 0,1 1,77.9,56" />
+</vector>

@@ -6,9 +6,19 @@ android {
 
     defaultConfig {
         applicationId 'com.kareem.lifeos'
-        minSdk 28
+        minSdk 26
         targetSdk 35
-        versionCode 81
-        versionName '0.8.1-m1'
+        versionCode 7
+        versionName '0.7.0'
+        testInstrumentationRunner 'android.test.InstrumentationTestRunner'
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
     }
 }
+
+dependencies { testImplementation 'junit:junit:4.13.2' }
