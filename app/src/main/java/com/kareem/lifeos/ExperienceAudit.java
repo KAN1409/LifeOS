@@ -66,22 +66,36 @@ public final class ExperienceAudit {
         Session s=session;if(s==null||a instanceof ExperienceAuditActivity)return;
         Target target=current(); if(target==null)return;
         MAIN.postDelayed(()->{
-            try{
-                String base=String.format(Locale.US,"%02d_%s",s.index+1,safe(target.label));
-                View root=a.getWindow().getDecorView().getRootView();
-                int w=Math.max(1,root.getWidth()),h=Math.max(1,root.getHeight());
-                Bitmap bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);root.draw(new Canvas(bmp));
-                try(FileOutputStream out=new FileOutputStream(new File(s.dir,base+".png"))){bmp.compress(Bitmap.CompressFormat.PNG,100,out);}bmp.recycle();
-                JSONObject screen=new JSONObject();screen.put("label",target.label);screen.put("activity",a.getClass().getName());screen.put("captured_at",System.currentTimeMillis());screen.put("width",w);screen.put("height",h);screen.put("view_tree",viewJson(root));screen.put("visible_text",visibleText(root));
-                writeJson(new File(s.dir,base+".json"),screen);
-                synchronized(ExperienceAudit.class){if(session==s)s.index++;}
-            }catch(Throwable t){
-                try{JSONObject e=new JSONObject();e.put("screen",target.label);e.put("error",String.valueOf(t));writeJson(new File(s.dir,"capture_error_"+s.index+".json"),e);}catch(Throwable ignored){}
-                synchronized(ExperienceAudit.class){if(session==s)s.index++;}
-            }
-            a.finish();
-        },850);
+            View root=a.getWindow().getDecorView().getRootView();
+            tapRequestedTab(root,target.label);
+            MAIN.postDelayed(()->captureAndFinish(a,root,s,target),needsAsyncWait(target.label)?1200:450);
+        },550);
     }
+    private static void captureAndFinish(Activity a,View root,Session s,Target target){
+        try{
+            String base=String.format(Locale.US,"%02d_%s",s.index+1,safe(target.label));
+            int w=Math.max(1,root.getWidth()),h=Math.max(1,root.getHeight());
+            Bitmap bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);root.draw(new Canvas(bmp));
+            try(FileOutputStream out=new FileOutputStream(new File(s.dir,base+".png"))){bmp.compress(Bitmap.CompressFormat.PNG,100,out);}bmp.recycle();
+            JSONObject screen=new JSONObject();screen.put("label",target.label);screen.put("activity",a.getClass().getName());screen.put("captured_at",System.currentTimeMillis());screen.put("width",w);screen.put("height",h);screen.put("view_tree",viewJson(root));screen.put("visible_text",visibleText(root));
+            writeJson(new File(s.dir,base+".json"),screen);
+            synchronized(ExperienceAudit.class){if(session==s)s.index++;}
+        }catch(Throwable t){
+            try{JSONObject e=new JSONObject();e.put("screen",target.label);e.put("error",String.valueOf(t));writeJson(new File(s.dir,"capture_error_"+s.index+".json"),e);}catch(Throwable ignored){}
+            synchronized(ExperienceAudit.class){if(session==s)s.index++;}
+        }
+        a.finish();
+    }
+    private static void tapRequestedTab(View root,String label){
+        String text=null;
+        if(label.contains("Understanding"))text="Understanding";
+        else if(label.contains("Diagnostics Attention"))text="Attention";
+        else if(label.contains("Social Radar"))text="Social Radar";
+        else if(label.contains("Decision Memory"))text="Decision Memory";
+        if(text!=null){View v=findText(root,text);if(v!=null)v.performClick();}
+    }
+    private static boolean needsAsyncWait(String label){return label.contains("Social Radar")||label.contains("Decision Memory")||label.contains("Life Intelligence");}
+    private static View findText(View v,String wanted){if(v instanceof TextView&&wanted.contentEquals(((TextView)v).getText()))return v;if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View r=findText(g.getChildAt(i),wanted);if(r!=null)return r;}}return null;}
 
     private static JSONObject runtimeSnapshot(Activity a){
         JSONObject j=new JSONObject();
