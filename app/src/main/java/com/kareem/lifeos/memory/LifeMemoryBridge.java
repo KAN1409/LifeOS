@@ -7,9 +7,9 @@ import com.kareem.lifeos.context.SemanticAssertion;
  * Nothing is memorized merely because raw text exists.
  */
 public final class LifeMemoryBridge {
-    private final PersistentLifeMemoryStore store;
+    private final LifeMemoryRepository repository;
 
-    public LifeMemoryBridge(PersistentLifeMemoryStore store) { this.store = store; }
+    public LifeMemoryBridge(LifeMemoryRepository repository) { this.repository = repository; }
 
     /**
      * Materialize one grounded assertion as durable memory.
@@ -20,8 +20,8 @@ public final class LifeMemoryBridge {
         if (assertion == null || assertion.state != SemanticAssertion.State.ASSERTED) return -1L;
         if (assertion.assertionId.isEmpty() || assertion.subjectEntityId.isEmpty()
                 || assertion.value.trim().isEmpty() || assertion.evidenceIds.isEmpty()) return -1L;
-        if (store.hasSimilar(assertion.value, assertion.subjectEntityId)) return -1L;
-        return store.remember(assertion.subjectEntityId, assertion.value, category, embedding,
+        if (repository.hasSimilar(assertion.value, assertion.subjectEntityId)) return -1L;
+        return repository.remember(assertion.subjectEntityId, assertion.value, category, embedding,
                 assertion.assertionId, assertion.evidenceIds, now);
     }
 }
