@@ -5,6 +5,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import com.kareem.lifeos.retrieval.HybridMemoryRecall;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.ArrayList;
@@ -18,7 +19,7 @@ import org.json.JSONArray;
  * Unlike the donor, every record can carry the semantic assertion and raw evidence IDs
  * that grounded it, so recall never severs memory from provenance.
  */
-public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
+public final class PersistentLifeMemoryStore extends SQLiteOpenHelper implements LifeMemoryRepository {
     private static final String DB_NAME = "lifeos_memory_v2.db";
     private static final int DB_VERSION = 1;
     private static volatile PersistentLifeMemoryStore instance;
@@ -54,7 +55,7 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {}
 
-    public synchronized long remember(String subjectEntityId, String text,
+    @Override public synchronized long remember(String subjectEntityId, String text,
                                       MemoryRecord.Category category, float[] embedding,
                                       String sourceAssertionId, List<String> evidenceIds,
                                       long now) {
@@ -74,9 +75,9 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
         return getWritableDatabase().insert("memories", null, v);
     }
 
-    public synchronized List<MemoryRecord> recall(String query, float[] queryEmbedding,
+    @Override public synchronized List<MemoryRecord> recall(String query, float[] queryEmbedding,
                                                    int topK, long now) {
-        List<MemoryRecord> ranked = MemoryAlgorithms.rank(searchable(), query, queryEmbedding, topK);
+        List<MemoryRecord> ranked = HybridMemoryRecall.rank(searchable(), query, queryEmbedding, topK);
         SQLiteDatabase db = getWritableDatabase();
         for (MemoryRecord record : ranked) {
             ContentValues v = new ContentValues();
@@ -91,24 +92,24 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
     }
 
     /** HOT subject memory for bounded always-available context. */
-    public synchronized List<MemoryRecord> hotForSubject(String subjectEntityId, int limit) {
+    @Override public synchronized List<MemoryRecord> hotForSubject(String subjectEntityId, int limit) {
         return query("subject_entity_id=? AND tier=?",
                 new String[]{safe(subjectEntityId), MemoryRecord.Tier.HOT.name()},
                 Math.max(1, Math.min(100, limit)));
     }
 
     /** General retrieval pool includes COLD records and all non-subject-specific durable memory. */
-    public synchronized List<MemoryRecord> searchable() {
+    @Override public synchronized List<MemoryRecord> searchable() {
         return query(null, null, 5000);
     }
 
-    public synchronized List<MemoryRecord> recentEpisodic(long since, int limit) {
+    @Override public synchronized List<MemoryRecord> recentEpisodic(long since, int limit) {
         return query("category=? AND added_at>=?",
                 new String[]{MemoryRecord.Category.EPISODIC.name(), Long.toString(since)},
                 Math.max(1, Math.min(1000, limit)));
     }
 
-    public synchronized boolean hasSimilar(String text, String subjectEntityId) {
+    @Override public synchronized boolean hasSimilar(String text, String subjectEntityId) {
         List<MemoryRecord> scope = subjectEntityId == null || subjectEntityId.trim().isEmpty()
                 ? searchable() : query("subject_entity_id=?", new String[]{subjectEntityId}, 5000);
         for (MemoryRecord record : scope) {
@@ -119,7 +120,7 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
     }
 
     /** Deterministic forgetting pass. Episodic records may die; durable records only cool. */
-    public synchronized DecaySummary runDecay(long now) {
+    @Override public synchronized DecaySummary runDecay(long now) {
         List<MemoryRecord> all = searchable();
         SQLiteDatabase db = getWritableDatabase();
         int cooled = 0, pruned = 0;
@@ -140,7 +141,7 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
         return new DecaySummary(all.size(), cooled, pruned, now);
     }
 
-    public synchronized int forgetBySubstring(String query, String subjectEntityId) {
+    @Override public synchronized int forgetBySubstring(String query, String subjectEntityId) {
         String normalized = MemoryAlgorithms.normalize(query);
         if (normalized.length() < 3) return 0;
         List<MemoryRecord> pool = subjectEntityId == null || subjectEntityId.trim().isEmpty()
@@ -155,7 +156,7 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
         return removed;
     }
 
-    public synchronized void eraseAll() { getWritableDatabase().delete("memories", null, null); }
+    @Override public synchronized void eraseAll() { getWritableDatabase().delete("memories", null, null); }
 
     private List<MemoryRecord> query(String selection, String[] args, int limit) {
         List<MemoryRecord> out = new ArrayList<MemoryRecord>();
@@ -213,7 +214,7 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper {
 
     public static final class DecaySummary {
         public final int scanned, cooled, pruned; public final long at;
-        DecaySummary(int scanned, int cooled, int pruned, long at) {
+        public DecaySummary(int scanned, int cooled, int pruned, long at) {
             this.scanned=scanned; this.cooled=cooled; this.pruned=pruned; this.at=at;
         }
     }
