@@ -5,13 +5,18 @@ public final class MessageObservation {
     public enum Direction { IN, OUT, UNKNOWN }
     public final String type="MESSAGE";
     public final String source="SCREEN";
+    public final String thread;
     public final Direction direction;
     public final String text;
     public final int left,top,right,bottom;
     public final long observedAt;
     public final double confidence;
-    public MessageObservation(Direction direction,String text,int left,int top,int right,int bottom,double confidence){this(direction,text,left,top,right,bottom,0L,confidence);}
+    public MessageObservation(Direction direction,String text,int left,int top,int right,int bottom,double confidence){this("",direction,text,left,top,right,bottom,0L,confidence);}
     public MessageObservation(Direction direction,String text,int left,int top,int right,int bottom,long observedAt,double confidence){
+        this("",direction,text,left,top,right,bottom,observedAt,confidence);
+    }
+    public MessageObservation(String thread,Direction direction,String text,int left,int top,int right,int bottom,long observedAt,double confidence){
+        this.thread=thread==null?"":thread;
         this.direction=direction==null?Direction.UNKNOWN:direction;this.text=text==null?"":text;
         this.left=left;this.top=top;this.right=right;this.bottom=bottom;this.observedAt=observedAt;
         this.confidence=Math.max(0.0,Math.min(1.0,confidence));

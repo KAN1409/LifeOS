@@ -33,4 +33,11 @@ public class ReconciliationEngineTest {
         NotificationObservation n=new NotificationObservation("chat","beta",at,0.86);
         assertEquals(2,ReconciliationEngine.reconcile("chat",Arrays.asList(s),Arrays.asList(n)).size());
     }
+
+    @Test public void sameBodyInDifferentThreadsDoesNotMerge(){
+        long at=30000L;
+        MessageObservation s=new MessageObservation("com.whatsapp|alice",MessageObservation.Direction.IN,"hello",0,0,100,100,at,0.80);
+        NotificationObservation n=new NotificationObservation("id","com.whatsapp|bob","hello",at,0.86);
+        assertEquals(2,ReconciliationEngine.reconcile("",Arrays.asList(s),Arrays.asList(n)).size());
+    }
 }

@@ -42,6 +42,12 @@ public final class StructuralElementExtractor {
         boolean compact=h<s.screenHeight/5;
 
         if(n.scrollable&&h>s.screenHeight/3)return StructuralElement.Role.SCROLL_REGION;
+        if(WhatsAppNodeSemantics.applies(s)){
+            if(WhatsAppNodeSemantics.isMessageBody(n)&&hasScrollableAncestor(s,n))return StructuralElement.Role.MESSAGE_CANDIDATE;
+            if(WhatsAppNodeSemantics.isMetadata(n))return StructuralElement.Role.OTHER;
+            if(WhatsAppNodeSemantics.isComposer(n))return StructuralElement.Role.COMPOSER;
+            if(WhatsAppNodeSemantics.isComposerAction(n))return StructuralElement.Role.ACTION;
+        }
         if(n.editable&&bottomBand)return StructuralElement.Role.COMPOSER;
         if(topBand&&n.clickable&&compact)return StructuralElement.Role.TOP_BAR;
         if(bottomBand&&n.clickable&&!n.editable&&compact)return StructuralElement.Role.ACTION;
@@ -60,7 +66,7 @@ public final class StructuralElementExtractor {
             return StructuralElement.Role.CENTER_MARKER;
         }
 
-        if(middleBand&&n.hasText()&&!n.clickable&&!n.editable&&compact){
+        if(middleBand&&n.hasText()&&!n.clickable&&!n.editable&&compact&&hasScrollableAncestor(s,n)){
             return StructuralElement.Role.MESSAGE_CANDIDATE;
         }
         return StructuralElement.Role.OTHER;
@@ -79,6 +85,15 @@ public final class StructuralElementExtractor {
             if((parent.editable||parent.clickable)&&parent.centerY()>(s.screenHeight*2/3))return true;
             if(parent.scrollable)return false;
             current=parent;
+        }
+        return false;
+    }
+
+    private static boolean hasScrollableAncestor(RawScreenSnapshot s,RawNode n){
+        RawNode current=n;
+        for(int hops=0;hops<12;hops++){
+            RawNode parent=findNode(s,current.parentId);if(parent==null)return false;
+            if(parent.scrollable)return true;current=parent;
         }
         return false;
     }

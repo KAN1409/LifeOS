@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Locale;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.HashSet;
+import java.util.Set;
 
 public final class LifeNotificationListener extends NotificationListenerService {
     @Override public void onNotificationPosted(StatusBarNotification sbn) {
@@ -21,8 +23,8 @@ public final class LifeNotificationListener extends NotificationListenerService 
         String thread=app+"|"+(conversation.isEmpty()?title:conversation).toLowerCase(Locale.ROOT).trim();
         String base=sbn.getKey()==null?app+"|"+sbn.getId()+"|"+sbn.getPostTime():sbn.getKey();CharSequence[] lines=e.getCharSequenceArray(Notification.EXTRA_TEXT_LINES);
         try(LifeDb db=new LifeDb(this)){
-            boolean stored=false;if(lines!=null&&lines.length>0){for(int i=0;i<lines.length;i++){String line=text(lines[i]);if(line.isEmpty())continue;stored|=store(db,base+"|line|"+i+"|"+sha(line),app,title,line,thread,sbn.getPostTime());}}
-            if(!stored)store(db,base+"|body|"+sha(body),app,title,body,thread,sbn.getPostTime());
+            boolean hadLine=false;Set<String> seen=new HashSet<String>();if(lines!=null&&lines.length>0){for(int i=0;i<lines.length;i++){String line=text(lines[i]);String normalized=line.toLowerCase(Locale.ROOT).replaceAll("\\s+"," ");if(line.isEmpty()||!seen.add(normalized))continue;hadLine=true;store(db,base+"|line|"+i+"|"+sha(line),app,title,line,thread,sbn.getPostTime());}}
+            if(!hadLine)store(db,base+"|body|"+sha(body),app,title,body,thread,sbn.getPostTime());
         }
     }
     private boolean store(LifeDb db,String key,String app,String title,String body,String thread,long at){

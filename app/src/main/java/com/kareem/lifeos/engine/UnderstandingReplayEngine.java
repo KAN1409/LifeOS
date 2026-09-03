@@ -37,9 +37,11 @@ public final class UnderstandingReplayEngine {
                 RawScreenSnapshot snapshot=RawEvidenceSerializer.restore(r.payload);if(snapshot==null)continue;
                 List<StructuralElement> elements=StructuralElementExtractor.extract(snapshot);
                 List<BubbleCandidate> bubbles=BubbleClusterer.cluster(snapshot,elements);
-                List<MessageObservation> current=MessageObservationBuilder.build(bubbles,snapshot.capturedAt);
-                appendNewVisible(screen,previousVisible.get(snapshot.packageName),current);
-                previousVisible.put(snapshot.packageName,current);
+                String thread=ConversationIdentityExtractor.fromSnapshot(snapshot);
+                List<MessageObservation> current=MessageObservationBuilder.build(bubbles,snapshot.capturedAt,thread);
+                String historyKey=snapshot.packageName+"|"+thread;
+                appendNewVisible(screen,previousVisible.get(historyKey),current);
+                previousVisible.put(historyKey,current);
             }else if("NOTIFICATION".equals(r.source)&&!r.text.trim().isEmpty()){
                 notifications.add(new NotificationObservation(r.payload,r.thread,r.text,r.observedAt,r.confidence));
             }

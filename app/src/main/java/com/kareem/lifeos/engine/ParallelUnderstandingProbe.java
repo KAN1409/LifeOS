@@ -19,11 +19,12 @@ public final class ParallelUnderstandingProbe {
         lastState=StructuralScreenClassifier.classify(snapshot);
         lastElements=StructuralElementExtractor.extract(snapshot);
         lastBubbles=BubbleClusterer.cluster(snapshot,lastElements);
-        lastMessages=MessageObservationBuilder.build(lastBubbles,snapshot==null?0L:snapshot.capturedAt);
+        String thread=ConversationIdentityExtractor.fromSnapshot(snapshot);
+        lastMessages=MessageObservationBuilder.build(lastBubbles,snapshot==null?0L:snapshot.capturedAt,thread);
         lastMetadata=MessageMetadataAssociator.associate(lastElements,lastMessages);
         ShadowCanonicalStore store=ShadowCanonicalStore.shared();
         for(MessageObservation m:lastMessages)store.appendRaw(new RawEvidenceRecord("SCREEN","",m.type,m.direction,m.text,m.observedAt,m.confidence));
-        List<CanonicalEvent> canonical=ReconciliationEngine.reconcile("",lastMessages,NotificationUnderstandingProbe.recent());
+        List<CanonicalEvent> canonical=ReconciliationEngine.reconcile(thread,lastMessages,NotificationUnderstandingProbe.recent());
         store.replaceCanonical(canonical);
         if(context!=null){
             PersistentUnderstandingStore persistent=PersistentUnderstandingStore.get(context);

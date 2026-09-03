@@ -16,13 +16,14 @@ public final class ReconciliationEngine {
         List<CanonicalEvent> out=new ArrayList<CanonicalEvent>();
         for(MessageObservation s:ss){
             int best=-1;double bestScore=0.0;
-            ReconciliationKey sk=ReconciliationKey.fromMessage(screenThread,s);
+            String resolvedThread=s.thread.trim().isEmpty()?screenThread:s.thread;
+            ReconciliationKey sk=ReconciliationKey.fromMessage(resolvedThread,s);
             for(int i=0;i<ns.size();i++){
                 if(used[i])continue;
                 NotificationObservation n=ns.get(i);
                 ReconciliationKey nk=new ReconciliationKey(n.thread,n.type,n.direction,n.text,n.observedAt);
                 if(!sk.compatibleWith(nk))continue;
-                double score=score(s,n,screenThread);
+                double score=score(s,n,resolvedThread);
                 if(score>bestScore){bestScore=score;best=i;}
             }
             if(best>=0&&bestScore>=0.72){
