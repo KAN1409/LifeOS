@@ -5,38 +5,34 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 
 /**
- * Builds the durable semantic layer without reparsing source text.
- *
- * Only observations carrying explicit normalized `life_fact_*` attributes become LifeFacts.
- * This keeps semantic extraction replaceable and prevents the Life Model from depending on
- * WhatsApp/UI wording. History is retained; current facts are a projection over revisions.
+ * Builds the semantic Life Model from replaceable semantic assertions.
+ * Raw observations remain immutable evidence and are never treated as semantic truth directly.
  */
 public final class LifeModelAssembler {
-    public static final String VERSION = "v2.3.0";
+    public static final String VERSION = "v2.3.1";
 
     private LifeModelAssembler() {}
 
-    public static LifeModelSnapshot rebuild(List<RawObservation> observations,
+    public static LifeModelSnapshot rebuild(List<SemanticAssertion> assertions,
                                             LifeContextSnapshot context,
                                             long rebuiltAt) {
-        List<RawObservation> ordered = new ArrayList<RawObservation>(
-                observations == null ? Collections.<RawObservation>emptyList() : observations);
-        Collections.sort(ordered, new Comparator<RawObservation>() {
-            @Override public int compare(RawObservation a, RawObservation b) {
+        List<SemanticAssertion> ordered = new ArrayList<SemanticAssertion>(
+                assertions == null ? Collections.<SemanticAssertion>emptyList() : assertions);
+        Collections.sort(ordered, new Comparator<SemanticAssertion>() {
+            @Override public int compare(SemanticAssertion a, SemanticAssertion b) {
                 int t = Long.compare(a.observedAt, b.observedAt);
-                return t != 0 ? t : a.observationId.compareTo(b.observationId);
+                return t != 0 ? t : a.assertionId.compareTo(b.assertionId);
             }
         });
 
         List<LifeFact> history = new ArrayList<LifeFact>();
         LinkedHashMap<String,LifeFact> latest = new LinkedHashMap<String,LifeFact>();
-        for (RawObservation observation : ordered) {
-            LifeFact fact = factFrom(observation);
-            if (fact == null) continue;
+        for (SemanticAssertion assertion : ordered) {
+            if (assertion == null || assertion.predicate.trim().isEmpty()) continue;
+            LifeFact fact = factFrom(assertion);
             history.add(fact);
             LifeFact old = latest.get(fact.logicalKey());
             if (old == null || fact.observedAt > old.observedAt ||
@@ -59,46 +55,17 @@ public final class LifeModelAssembler {
         return new LifeModelSnapshot(VERSION, rebuiltAt, history, current, situations);
     }
 
-    private static LifeFact factFrom(RawObservation o) {
-        if (o == null || o.attributes == null) return null;
-        String predicate = attr(o, "life_fact_predicate");
-        if (predicate.isEmpty()) return null;
-
-        String subject = attr(o, "life_fact_subject_id");
-        if (subject.isEmpty()) subject = attr(o, "canonical_entity_id");
-        if (subject.isEmpty()) subject = "stream:" + EntityResolver.normalize(o.streamId);
-
-        String value = attr(o, "life_fact_value");
-        String stateText = attr(o, "life_fact_state");
-        LifeFact.State state = "RETRACTED".equals(stateText.toUpperCase(Locale.ROOT))
+    private static LifeFact factFrom(SemanticAssertion a) {
+        LifeFact.State state = a.state == SemanticAssertion.State.RETRACTED
                 ? LifeFact.State.RETRACTED : LifeFact.State.ASSERTED;
-        long validFrom = parseLong(attr(o, "life_fact_valid_from"), o.observedAt);
-        long validTo = parseLong(attr(o, "life_fact_valid_to"), 0L);
-        double confidence = parseDouble(attr(o, "life_fact_confidence"), 1.0);
-
-        List<String> evidence = new ArrayList<String>();
-        evidence.add(o.observationId);
-        return new LifeFact("fact:" + o.observationId, normalizeSubject(subject),
-                EntityResolver.normalize(predicate), value, state, o.observedAt,
-                validFrom, validTo, confidence, evidence);
+        return new LifeFact("fact:" + a.assertionId, normalizeSubject(a.subjectEntityId),
+                EntityResolver.normalize(a.predicate), a.value, state, a.observedAt,
+                a.validFrom, a.validTo, a.confidence, a.evidenceIds);
     }
 
     private static String normalizeSubject(String subject) {
         String s = EntityResolver.normalize(subject);
+        if (s.isEmpty()) return "entity:unknown";
         return s.startsWith("entity:") || s.startsWith("stream:") ? s : "entity:" + s;
-    }
-
-    private static String attr(RawObservation o, String key) {
-        String value = o.attributes.get(key);
-        return value == null ? "" : value.trim();
-    }
-
-    private static long parseLong(String value, long fallback) {
-        try { return Long.parseLong(value); } catch (Exception ignored) { return fallback; }
-    }
-
-    private static double parseDouble(String value, double fallback) {
-        try { return Math.max(0.0, Math.min(1.0, Double.parseDouble(value))); }
-        catch (Exception ignored) { return fallback; }
     }
 }
