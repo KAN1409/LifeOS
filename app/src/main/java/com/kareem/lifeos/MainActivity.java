@@ -67,6 +67,7 @@ public final class MainActivity extends Activity {
         agentActions.addView(configure,new LinearLayout.LayoutParams(0,dp(42),1));LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,dp(42),1);ap.setMargins(dp(7),0,0,0);agentActions.addView(start,ap);LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(42),1);tp.setMargins(dp(7),0,0,0);agentActions.addView(talk,tp);agent.addView(agentActions);
         Button intelligence=secondary("Life Intelligence  →");intelligence.setOnClickListener(v->startActivity(new Intent(this,SecondBrainActivity.class)));LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,dp(44));ip.setMargins(0,dp(9),0,0);agent.addView(intelligence,ip);
         Button signals=secondary("Life Signals · Social Radar + Decisions  →");signals.setOnClickListener(v->startActivity(new Intent(this,LifeSignalsActivity.class)));LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,dp(44));sp.setMargins(0,dp(8),0,0);agent.addView(signals,sp);
+        Button actions=secondary("Action Center · approval gate  →");actions.setOnClickListener(v->startActivity(new Intent(this,ActionCenterActivity.class)));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(-1,dp(44));xp.setMargins(0,dp(8),0,0);agent.addView(actions,xp);
         body.addView(agent);
         root.addView(body,new LinearLayout.LayoutParams(-1,-2));
 
@@ -103,7 +104,7 @@ public final class MainActivity extends Activity {
         boolean enabled=notifications!=null&&notifications.contains(getPackageName()),screen=services!=null&&services.contains(getPackageName()+"/"+LifeScreenContextService.class.getName());
         PersistentUnderstandingStore u=PersistentUnderstandingStore.get(this);String version=u.canonicalEngineVersion();if(blank(version))version="pending";
         int raw=UniversalObservationStore.get(this).count(),memories=PersistentLifeMemoryStore.get(this).searchable().size();boolean brain=new ConfigManager(this).isConfigured();
-        status.setText((enabled?"●":"○")+" notifications   "+(screen?"●":"○")+" screen context   "+(brain?"●":"○")+" agent brain\n"+raw+" raw observations  ·  "+memories+" grounded memories  ·  "+db.count("open_loops")+" attention items\nengine "+version+"  ·  Teya Harness imported  ·  SecondBrain + Graphiti clients ready");
+        status.setText((enabled?"●":"○")+" notifications   "+(screen?"●":"○")+" screen context   "+(brain?"●":"○")+" agent brain\n"+raw+" raw observations  ·  "+memories+" grounded memories  ·  "+db.count("open_loops")+" attention items\nengine "+version+"  ·  Teya Harness imported  ·  SecondBrain + Graphiti + approval gate ready");
         status.setTextColor(enabled||screen||brain?GREEN:MUTED);showRecent();
     }
 
