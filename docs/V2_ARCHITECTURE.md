@@ -10,6 +10,7 @@ LifeOS V2 evolves the existing Android application; it is not a rewrite.
 4. Existing LifeOS behavior remains operational while V2 runs in parallel until proven better.
 5. Action execution is downstream of understanding and requires an explicit policy/approval boundary.
 6. Inferred identities are source-scoped. Cross-source identity requires explicit canonical evidence; matching display names alone are never sufficient.
+7. Semantic Life Model state is a projection over evidence-backed revisions; newer interpretations never erase historical evidence.
 
 ## Pipeline
 
@@ -22,7 +23,7 @@ Android sources
   -> ContextEvent
   -> Episode
   -> Situation
-  -> Life Model (people, projects, commitments, relationships)
+  -> Life Model (temporal facts + current projection)
   -> Deep Brain / decision engine
   -> proposed action
   -> policy + approval
@@ -53,8 +54,10 @@ Current conservative rules:
 - app identity alone never merges situations;
 - matching names across different sources never merge unless a canonical entity ID is supplied.
 
-### V2.3 Life Model — next
-People, conversations, projects, commitments, open loops, relationships, situation state, and temporal state. This layer must reference V2.2 entities/situations rather than re-parsing source text independently.
+### V2.3 Life Model — implemented foundation
+`LifeFact` provides evidence-backed semantic revisions with subject, predicate, value, assertion/retraction state, observation time, validity interval, confidence, and evidence IDs. `LifeModelAssembler` consumes only explicit normalized `life_fact_*` attributes; it never reparses WhatsApp/UI/source text. It retains the complete fact history and derives `currentFacts` as a rebuildable projection, so later revisions/retractions do not destroy history. The universal store can rebuild context and the Life Model from the same retained evidence set.
+
+Next V2.3 work is semantic extraction/enrichment that can emit normalized facts for people, projects, commitments, open loops, appointments and relationships without source-specific patches.
 
 ### V2.4 Deep Brain
 Situation ranking, options, decisions, reflection, checkpoints, and idempotent agent execution.
