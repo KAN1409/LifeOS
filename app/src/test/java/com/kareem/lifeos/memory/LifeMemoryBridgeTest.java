@@ -4,6 +4,7 @@ import static org.junit.Assert.assertEquals;
 
 import com.kareem.lifeos.context.SemanticAssertion;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import org.junit.Test;
 
@@ -55,6 +56,19 @@ public class LifeMemoryBridgeTest {
             return 42L;
         }
 
+        @Override public List<MemoryRecord> recall(String query, float[] queryEmbedding, int topK, long now) {
+            return Collections.emptyList();
+        }
+        @Override public List<MemoryRecord> hotForSubject(String subjectEntityId, int limit) {
+            return Collections.emptyList();
+        }
+        @Override public List<MemoryRecord> searchable() { return Collections.emptyList(); }
+        @Override public List<MemoryRecord> recentEpisodic(long since, int limit) { return Collections.emptyList(); }
         @Override public boolean hasSimilar(String text, String subjectEntityId) { return similar; }
+        @Override public PersistentLifeMemoryStore.DecaySummary runDecay(long now) {
+            return new PersistentLifeMemoryStore.DecaySummary(0, 0, 0, now);
+        }
+        @Override public int forgetBySubstring(String query, String subjectEntityId) { return 0; }
+        @Override public void eraseAll() {}
     }
 }
