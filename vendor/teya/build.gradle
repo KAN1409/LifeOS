@@ -28,6 +28,10 @@ ext.teyaAgentCore = [
     'com/teya/agent/household/ContactsRepository.kt'        : 'bc6c7a2284e8f1c2b521b55dfb4b838bab2b8724',
     'com/teya/agent/household/HouseholdManager.kt'          : 'aacd8346c71f6682626e8cbd9a07aec8c80baceb',
     'com/teya/agent/household/Languages.kt'                 : 'd06971968985a708905a0cb7095784e46066741c',
+    'com/teya/agent/household/SpeakerIdManager.kt'          : '088c061db7c09d2fa7221b8ec0c1e13f5018ff75',
+    'com/teya/agent/voice/speaker/SpeakerEmbedder.kt'       : '26a9e0491d918c3a6380a262a55439aad95d74a5',
+    'com/teya/agent/voice/speaker/CamPlusPlusSpeakerEmbedder.kt': '868a6c84df229b6a2a8ddfb6387ebd9193120b68',
+    'com/teya/agent/voice/speaker/Fbank.kt'                 : 'fee0eef2331c9fe20ff391ba136acfb867839b33',
 ]
 
 def gitBlobSha = { byte[] bytes ->
@@ -98,4 +102,5 @@ dependencies {
     implementation 'io.ktor:ktor-client-websockets:2.3.12'
     implementation 'io.ktor:ktor-serialization-kotlinx-json:2.3.12'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.22.0'
 }
