@@ -1,0 +1,14 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'com.kareem.lifeos'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.kareem.lifeos'
+        minSdk 28
+        targetSdk 35
+        versionCode 81
+        versionName '0.8.1-m1'
+    }
+}
