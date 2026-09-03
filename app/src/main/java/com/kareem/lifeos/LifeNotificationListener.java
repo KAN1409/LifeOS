@@ -4,6 +4,7 @@ import android.app.Notification;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
+import com.kareem.lifeos.engine.NotificationUnderstandingProbe;
 import java.util.List;
 import java.util.Locale;
 import java.nio.charset.StandardCharsets;
@@ -24,7 +25,13 @@ public final class LifeNotificationListener extends NotificationListenerService 
             if(!stored)store(db,base+"|body|"+sha(body),app,title,body,thread,sbn.getPostTime());
         }
     }
-    private boolean store(LifeDb db,String key,String app,String title,String body,String thread,long at){if(isSensitive(title+" "+body)||CapturePolicy.isNotificationSummary(body))return false;long id=db.upsertEvent(key,app,title,body,thread,at);if(id>0){List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(title,body,System.currentTimeMillis());for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);return true;}return false;}
+    private boolean store(LifeDb db,String key,String app,String title,String body,String thread,long at){
+        if(isSensitive(title+" "+body)||CapturePolicy.isNotificationSummary(body))return false;
+        NotificationUnderstandingProbe.observe(thread,body,at);
+        long id=db.upsertEvent(key,app,title,body,thread,at);
+        if(id>0){List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(title,body,System.currentTimeMillis());for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);return true;}
+        return false;
+    }
     private static boolean isSensitive(String s){String x=s.toLowerCase(Locale.ROOT);return x.contains("otp")||x.contains("one-time password")||x.contains("verification code")||x.contains("رمز التحقق")||x.contains("كود التحقق");}
     private static String text(CharSequence x){return x==null?"":x.toString().trim();}
     private static String sha(String value){try{byte[] b=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));StringBuilder x=new StringBuilder();for(byte q:b)x.append(String.format(Locale.US,"%02x",q));return x.toString();}catch(Exception e){return Integer.toHexString(value.hashCode());}}
