@@ -44,6 +44,13 @@
         <activity android:name=".LifeSignalsActivity" android:exported="false" />
         <activity android:name=".ActionCenterActivity" android:exported="false" />
 
+        <receiver android:name=".actions.TeyaApprovalReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="com.kareem.lifeos.TEYA_APPROVAL_REQUEST" />
+                <action android:name="com.kareem.lifeos.TEYA_EXECUTION_RESULT" />
+            </intent-filter>
+        </receiver>
+
         <service
             android:name=".LifeNotificationListener"
             android:exported="true"
