@@ -24,4 +24,7 @@ android {
     }
 }
 
-dependencies { testImplementation 'junit:junit:4.13.2' }
+dependencies {
+    implementation project(':vendor:teya')
+    testImplementation 'junit:junit:4.13.2'
+}
