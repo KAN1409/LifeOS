@@ -8,8 +8,8 @@ android {
         applicationId 'com.kareem.lifeos'
         minSdk 26
         targetSdk 35
-        versionCode 20
-        versionName '0.9.4-V2-approval-gated'
+        versionCode 21
+        versionName '0.9.5-V2-life-signals'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 
