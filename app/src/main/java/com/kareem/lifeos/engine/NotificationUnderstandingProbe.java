@@ -21,7 +21,7 @@ public final class NotificationUnderstandingProbe {
         while(recent.size()>MAX)recent.remove(0);
         ShadowCanonicalStore store=ShadowCanonicalStore.shared();
         store.appendRaw(new RawEvidenceRecord("NOTIFICATION",thread,"MESSAGE",MessageObservation.Direction.IN,text,at,observation.confidence));
-        lastCanonical=ReconciliationEngine.reconcile("",ParallelUnderstandingProbe.lastMessages(),new ArrayList<NotificationObservation>(recent));
+        lastCanonical=ReconciliationEngine.reconcile("",ParallelUnderstandingProbe.eventMessages(),new ArrayList<NotificationObservation>(recent));
         store.replaceCanonical(lastCanonical);
         if(context!=null){
             PersistentUnderstandingStore persistent=PersistentUnderstandingStore.get(context);

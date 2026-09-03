@@ -4,7 +4,6 @@ import android.content.Context;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,7 +29,7 @@ public final class UnderstandingReplayEngine {
     public static List<CanonicalEvent> rebuild(List<PersistentRawEvidence> raw){
         List<MessageObservation> screen=new ArrayList<MessageObservation>();
         List<NotificationObservation> notifications=new ArrayList<NotificationObservation>();
-        Map<String,List<MessageObservation>> previousVisible=new HashMap<String,List<MessageObservation>>();
+        SceneDeltaEngine sceneDelta=new SceneDeltaEngine();
         if(raw!=null)for(PersistentRawEvidence r:raw){
             if(r==null)continue;
             if("SCREEN_TREE".equals(r.source)){
@@ -40,8 +39,8 @@ public final class UnderstandingReplayEngine {
                 String thread=ConversationIdentityExtractor.fromSnapshot(snapshot);
                 List<MessageObservation> current=MessageObservationBuilder.build(bubbles,snapshot.capturedAt,thread);
                 String historyKey=snapshot.packageName+"|"+thread;
-                appendNewVisible(screen,previousVisible.get(historyKey),current);
-                previousVisible.put(historyKey,current);
+                List<EventEvidence> visible=new ArrayList<EventEvidence>();for(MessageObservation m:current)visible.add(EventEvidence.fromScreen(m));
+                for(EventEvidence e:sceneDelta.observe(historyKey,visible))screen.add(new MessageObservation(e.context,e.direction,e.content,0,0,0,0,e.observedAt,e.confidence));
             }else if("NOTIFICATION".equals(r.source)&&!r.text.trim().isEmpty()){
                 notifications.add(new NotificationObservation(r.payload,r.thread,r.text,r.observedAt,r.confidence));
             }
