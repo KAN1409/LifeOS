@@ -22,6 +22,14 @@ public final class EntityResolver {
                     EntityRef.Kind.APPLICATION, observation.sourcePackage, 1.0));
         }
 
+        String explicitId = value(observation.attributes, "canonical_entity_id");
+        if (!explicitId.isEmpty()) {
+            String label = value(observation.attributes, "canonical_entity_label");
+            if (label.isEmpty()) label = explicitId;
+            EntityRef.Kind kind = parseKind(value(observation.attributes, "canonical_entity_kind"));
+            put(out, new EntityRef("entity:" + normalize(explicitId), kind, label, 1.0));
+        }
+
         String conversation = firstNonEmpty(observation.attributes.get("conversation_title"),
                 observation.attributes.get("conversation"));
         String title = observation.attributes.get("title");
@@ -56,6 +64,18 @@ public final class EntityResolver {
     static String normalize(String value) {
         if (value == null) return "";
         return value.toLowerCase(Locale.ROOT).trim().replaceAll("\\s+", " ");
+    }
+
+    private static EntityRef.Kind parseKind(String value) {
+        if (value == null || value.trim().isEmpty()) return EntityRef.Kind.UNKNOWN;
+        try { return EntityRef.Kind.valueOf(value.trim().toUpperCase(Locale.ROOT)); }
+        catch (Exception ignored) { return EntityRef.Kind.UNKNOWN; }
+    }
+
+    private static String value(Map<String,String> map, String key) {
+        if (map == null) return "";
+        String v = map.get(key);
+        return v == null ? "" : v.trim();
     }
 
     private static String firstNonEmpty(String a, String b) {
