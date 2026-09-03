@@ -86,7 +86,6 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
         return out;
     }
 
-    /** Rebuilds the derived context from retained evidence; no derived state is authoritative. */
     public synchronized LifeContextSnapshot rebuildContext(int observationLimit, long rebuiltAt) {
         return LifeContextAssembler.rebuild(recent(observationLimit), rebuiltAt);
     }
@@ -95,15 +94,19 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
         return rebuildContext(observationLimit, System.currentTimeMillis());
     }
 
-    /** Rebuilds both context and the temporal semantic Life Model from the same evidence set. */
-    public synchronized LifeModelSnapshot rebuildLifeModel(int observationLimit, long rebuiltAt) {
+    /** Replays semantics from raw evidence, then rebuilds the Life Model. */
+    public synchronized LifeModelSnapshot rebuildLifeModel(int observationLimit,
+                                                            SemanticInterpreter interpreter,
+                                                            long rebuiltAt) {
         List<RawObservation> evidence = recent(observationLimit);
         LifeContextSnapshot context = LifeContextAssembler.rebuild(evidence, rebuiltAt);
-        return LifeModelAssembler.rebuild(evidence, context, rebuiltAt);
+        List<SemanticAssertion> assertions = SemanticReplayEngine.replay(evidence, interpreter);
+        return LifeModelAssembler.rebuild(assertions, context, rebuiltAt);
     }
 
-    public synchronized LifeModelSnapshot rebuildLifeModel(int observationLimit) {
-        return rebuildLifeModel(observationLimit, System.currentTimeMillis());
+    public synchronized LifeModelSnapshot rebuildLifeModel(int observationLimit,
+                                                            SemanticInterpreter interpreter) {
+        return rebuildLifeModel(observationLimit, interpreter, System.currentTimeMillis());
     }
 
     public synchronized int count() {
