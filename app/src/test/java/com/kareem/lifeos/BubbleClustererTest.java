@@ -43,4 +43,15 @@ public class BubbleClustererTest {
         assertEquals(1,bubbles.size());
         assertEquals(BubbleCandidate.Sender.UNKNOWN,bubbles.get(0).sender);
     }
+
+    @Test public void wideAncestorDoesNotTurnRightAlignedTextIntoIncoming(){
+        RawScreenSnapshot s=new RawScreenSnapshot("com.whatsapp",1,1080,2400,Arrays.asList(
+            new RawNode(1,-1,0,"ScrollView","","","",0,250,1080,2000,false,true,false),
+            new RawNode(10,1,1,"ViewGroup","","","",100,800,1030,940,false,false,false),
+            new RawNode(11,10,2,"TextView","","4","",760,820,980,900,false,false,false)
+        ));
+        List<BubbleCandidate> bubbles=BubbleClusterer.cluster(s,StructuralElementExtractor.extract(s));
+        assertEquals(1,bubbles.size());
+        assertEquals(BubbleCandidate.Sender.SELF,bubbles.get(0).sender);
+    }
 }

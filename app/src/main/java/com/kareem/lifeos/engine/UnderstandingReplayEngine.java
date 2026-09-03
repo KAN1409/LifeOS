@@ -4,7 +4,9 @@ import android.content.Context;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /** Rebuilds canonical interpretation from immutable persisted raw evidence. */
 public final class UnderstandingReplayEngine {
@@ -28,24 +30,41 @@ public final class UnderstandingReplayEngine {
     public static List<CanonicalEvent> rebuild(List<PersistentRawEvidence> raw){
         List<MessageObservation> screen=new ArrayList<MessageObservation>();
         List<NotificationObservation> notifications=new ArrayList<NotificationObservation>();
+        Map<String,List<MessageObservation>> previousVisible=new HashMap<String,List<MessageObservation>>();
         if(raw!=null)for(PersistentRawEvidence r:raw){
             if(r==null)continue;
             if("SCREEN_TREE".equals(r.source)){
                 RawScreenSnapshot snapshot=RawEvidenceSerializer.restore(r.payload);if(snapshot==null)continue;
                 List<StructuralElement> elements=StructuralElementExtractor.extract(snapshot);
                 List<BubbleCandidate> bubbles=BubbleClusterer.cluster(snapshot,elements);
-                screen.addAll(MessageObservationBuilder.build(bubbles,snapshot.capturedAt));
+                List<MessageObservation> current=MessageObservationBuilder.build(bubbles,snapshot.capturedAt);
+                appendNewVisible(screen,previousVisible.get(snapshot.packageName),current);
+                previousVisible.put(snapshot.packageName,current);
             }else if("NOTIFICATION".equals(r.source)&&!r.text.trim().isEmpty()){
-                notifications.add(new NotificationObservation(r.thread,r.text,r.observedAt,r.confidence));
+                notifications.add(new NotificationObservation(r.payload,r.thread,r.text,r.observedAt,r.confidence));
             }
         }
-        List<CanonicalEvent> out=new ArrayList<CanonicalEvent>(ReconciliationEngine.reconcile("",dedupeScreen(screen),notifications));
+        List<CanonicalEvent> out=new ArrayList<CanonicalEvent>(ReconciliationEngine.reconcile("",screen,dedupeNotifications(notifications)));
         Collections.sort(out,new Comparator<CanonicalEvent>(){@Override public int compare(CanonicalEvent a,CanonicalEvent b){return Long.compare(a.observedAt,b.observedAt);}});
         return Collections.unmodifiableList(out);
     }
 
-    private static List<MessageObservation> dedupeScreen(List<MessageObservation> input){
-        List<MessageObservation> out=new ArrayList<MessageObservation>();
-        for(MessageObservation m:input){boolean duplicate=false;for(int i=out.size()-1;i>=0;i--){MessageObservation prior=out.get(i);long dt=Math.abs(prior.observedAt-m.observedAt);if(dt>30000L)break;if(prior.direction==m.direction&&ReconciliationKey.normalize(prior.text).equals(ReconciliationKey.normalize(m.text))){duplicate=true;break;}}if(!duplicate)out.add(m);}return out;
+    static void appendNewVisible(List<MessageObservation> history,List<MessageObservation> previous,List<MessageObservation> current){
+        if(current==null||current.isEmpty())return;
+        if(previous==null||previous.isEmpty()){history.addAll(current);return;}
+        int a=previous.size(),b=current.size();int[][] lcs=new int[a+1][b+1];
+        for(int i=a-1;i>=0;i--)for(int j=b-1;j>=0;j--)lcs[i][j]=same(previous.get(i),current.get(j))?1+lcs[i+1][j+1]:Math.max(lcs[i+1][j],lcs[i][j+1]);
+        boolean[] matched=new boolean[b];int i=0,j=0;
+        while(i<a&&j<b){if(same(previous.get(i),current.get(j))){matched[j]=true;i++;j++;}else if(lcs[i+1][j]>=lcs[i][j+1])i++;else j++;}
+        for(j=0;j<b;j++)if(!matched[j])history.add(current.get(j));
+    }
+
+    private static boolean same(MessageObservation a,MessageObservation b){return a.direction==b.direction&&ReconciliationKey.normalize(a.text).equals(ReconciliationKey.normalize(b.text));}
+
+    private static List<NotificationObservation> dedupeNotifications(List<NotificationObservation> input){
+        Map<String,NotificationObservation> identified=new java.util.LinkedHashMap<String,NotificationObservation>();
+        List<NotificationObservation> anonymous=new ArrayList<NotificationObservation>();
+        for(NotificationObservation n:input){if(n.evidenceId.trim().isEmpty())anonymous.add(n);else identified.put(n.evidenceId,n);}
+        anonymous.addAll(identified.values());return anonymous;
     }
 }

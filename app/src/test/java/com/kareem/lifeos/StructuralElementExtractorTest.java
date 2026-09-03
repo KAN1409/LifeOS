@@ -35,6 +35,15 @@ public class StructuralElementExtractorTest {
         assertEquals(StructuralElement.Role.CENTER_MARKER,roleOf(StructuralElementExtractor.extract(s),2));
     }
 
+    @Test public void passiveDescriptionInsideLowerComposerActionIsNotMessage(){
+        RawScreenSnapshot s=new RawScreenSnapshot("test",1,1080,2400,Arrays.asList(
+            new RawNode(1,-1,0,"ScrollView","","","",0,250,1080,2050,false,true,false),
+            new RawNode(2,-1,0,"ViewGroup","","","",0,1950,1080,2400,true,false,false),
+            new RawNode(3,2,1,"TextView","","","Voice message, Button. Double tap and hold to record",100,1980,900,2100,false,false,false)
+        ));
+        assertEquals(StructuralElement.Role.ACTION,roleOf(StructuralElementExtractor.extract(s),3));
+    }
+
     private static StructuralElement.Role roleOf(List<StructuralElement> xs,int id){
         for(StructuralElement x:xs)if(x.node.id==id)return x.role;
         fail("Missing node "+id);

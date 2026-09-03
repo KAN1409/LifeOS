@@ -27,8 +27,15 @@ public final class BubbleClusterer {
             int l=container!=null?container.left:Integer.MAX_VALUE,t=container!=null?container.top:Integer.MAX_VALUE,r=container!=null?container.right:0,b=container!=null?container.bottom:0;
             if(container==null)for(RawNode n:group){l=Math.min(l,n.left);t=Math.min(t,n.top);r=Math.max(r,n.right);b=Math.max(b,n.bottom);}
             String body=BubbleTextExtractor.body(group);if(body.isEmpty())continue;
-            int cx=l+Math.max(0,r-l)/2;BubbleCandidate.Sender sender=BubbleCandidate.Sender.UNKNOWN;double confidence=0.60;int margin=s.screenWidth/10;
-            if(cx<s.screenWidth/2-margin){sender=BubbleCandidate.Sender.OTHER;confidence=0.78;}else if(cx>s.screenWidth/2+margin){sender=BubbleCandidate.Sender.SELF;confidence=0.78;}
+            // Ancestors are useful for grouping but WhatsApp may give them nearly
+            // full-row bounds. Direction must come from the tight text/metadata row.
+            int tightLeft=Integer.MAX_VALUE,tightRight=0;
+            for(RawNode n:group){tightLeft=Math.min(tightLeft,n.left);tightRight=Math.max(tightRight,n.right);}
+            int cx=tightLeft+Math.max(0,tightRight-tightLeft)/2;BubbleCandidate.Sender sender=BubbleCandidate.Sender.UNKNOWN;double confidence=0.60;int margin=s.screenWidth/12;
+            if(tightRight<s.screenWidth/2+margin){sender=BubbleCandidate.Sender.OTHER;confidence=0.80;}
+            else if(tightLeft>s.screenWidth/2-margin){sender=BubbleCandidate.Sender.SELF;confidence=0.80;}
+            else if(cx<s.screenWidth/2-margin){sender=BubbleCandidate.Sender.OTHER;confidence=0.72;}
+            else if(cx>s.screenWidth/2+margin){sender=BubbleCandidate.Sender.SELF;confidence=0.72;}
             out.add(new BubbleCandidate(group,body,l,t,r,b,sender,confidence));
         }
         Collections.sort(out,new Comparator<BubbleCandidate>(){@Override public int compare(BubbleCandidate a,BubbleCandidate b){int y=a.top-b.top;return y!=0?y:a.left-b.left;}});

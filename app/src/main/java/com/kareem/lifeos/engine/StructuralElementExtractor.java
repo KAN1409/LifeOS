@@ -45,6 +45,9 @@ public final class StructuralElementExtractor {
         if(n.editable&&bottomBand)return StructuralElement.Role.COMPOSER;
         if(topBand&&n.clickable&&compact)return StructuralElement.Role.TOP_BAR;
         if(bottomBand&&n.clickable&&!n.editable&&compact)return StructuralElement.Role.ACTION;
+        // Accessibility services often expose a passive text/description child for a
+        // composer button. Its own flags look message-like, so exclude it by ancestry.
+        if(hasLowerInteractiveAncestor(s,n))return StructuralElement.Role.ACTION;
 
         RawNode parent=findNode(s,n.parentId);
         boolean directHistoryChild=parent!=null&&parent.scrollable;
@@ -67,6 +70,17 @@ public final class StructuralElementExtractor {
         if(id<0)return null;
         for(RawNode n:s.nodes)if(n.id==id)return n;
         return null;
+    }
+
+    private static boolean hasLowerInteractiveAncestor(RawScreenSnapshot s,RawNode n){
+        RawNode current=n;
+        for(int hops=0;hops<8;hops++){
+            RawNode parent=findNode(s,current.parentId);if(parent==null)return false;
+            if((parent.editable||parent.clickable)&&parent.centerY()>(s.screenHeight*2/3))return true;
+            if(parent.scrollable)return false;
+            current=parent;
+        }
+        return false;
     }
 
     private static double confidence(StructuralElement.Role role,RawNode n,RawScreenSnapshot s){

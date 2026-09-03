@@ -27,7 +27,7 @@ public final class LifeNotificationListener extends NotificationListenerService 
     }
     private boolean store(LifeDb db,String key,String app,String title,String body,String thread,long at){
         if(isSensitive(title+" "+body)||CapturePolicy.isNotificationSummary(body))return false;
-        NotificationUnderstandingProbe.observe(this,thread,body,at);
+        NotificationUnderstandingProbe.observe(this,thread,body,at,key);
         long id=db.upsertEvent(key,app,title,body,thread,at);
         if(id>0){List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(title,body,System.currentTimeMillis());for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);return true;}return false;
     }
