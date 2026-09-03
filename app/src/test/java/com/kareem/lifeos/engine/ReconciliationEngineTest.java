@@ -13,18 +13,18 @@ public class ReconciliationEngineTest {
         List<CanonicalEvent> out=ReconciliationEngine.reconcile("chat",Arrays.asList(s),Arrays.asList(n));
         assertEquals(1,out.size());
         assertTrue(out.get(0).merged());
-        assertEquals(MessageObservation.Direction.IN,out.get(0).direction);
+        assertEquals(MessageObservation.Direction.UNKNOWN,out.get(0).direction);
         assertEquals(2,out.get(0).sources.size());
     }
 
-    @Test public void knownOppositeDirectionsDoNotMerge(){
+    @Test public void notificationDoesNotInventDirectionAndCanSupportScreenEvidence(){
         long at=200000L;
         MessageObservation s=new MessageObservation(MessageObservation.Direction.OUT,"same",0,0,100,100,at,0.80);
         NotificationObservation n=new NotificationObservation("chat","same",at,0.86);
         List<CanonicalEvent> out=ReconciliationEngine.reconcile("chat",Arrays.asList(s),Arrays.asList(n));
-        assertEquals(2,out.size());
-        assertFalse(out.get(0).merged());
-        assertFalse(out.get(1).merged());
+        assertEquals(1,out.size());
+        assertTrue(out.get(0).merged());
+        assertEquals(MessageObservation.Direction.OUT,out.get(0).direction);
     }
 
     @Test public void differentTextsStaySeparate(){
