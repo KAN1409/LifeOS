@@ -30,6 +30,7 @@
         <activity android:name=".ConversationDetailActivity" android:exported="false" />
         <activity android:name=".PersonDetailActivity" android:exported="false" />
         <activity android:name=".SuggestedActionDetailActivity" android:exported="false" />
+        <activity android:name=".SituationDetailActivity" android:exported="false" />
         <activity android:name=".MainActivity" android:exported="false" />
         <activity android:name=".SecondBrainActivity" android:exported="false" />
         <activity android:name=".LifeSignalsActivity" android:exported="false" />
