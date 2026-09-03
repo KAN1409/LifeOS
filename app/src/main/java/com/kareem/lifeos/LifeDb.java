@@ -65,6 +65,12 @@ final class LifeDb extends SQLiteOpenHelper {
                 new Object[]{evidenceId,x.fingerprint,x.kind,x.title,x.dueAt,x.confidence,System.currentTimeMillis()});
     }
 
+    Event eventById(long id){
+        try(Cursor c=getReadableDatabase().rawQuery("SELECT id,captured_at,app,title,body,thread_key FROM events WHERE id=? LIMIT 1",new String[]{String.valueOf(id)})){
+            return c.moveToFirst()?new Event(c.getLong(0),c.getLong(1),c.getString(2),c.getString(3),c.getString(4),c.getString(5)):null;
+        }
+    }
+
     List<Event> recentEvents(int limit) {
         ArrayList<Event> out=new ArrayList<>();
         try(Cursor c=getReadableDatabase().rawQuery("SELECT id,captured_at,app,title,body,thread_key FROM events ORDER BY captured_at DESC LIMIT ?",new String[]{String.valueOf(Math.max(limit*3,limit))})) {
