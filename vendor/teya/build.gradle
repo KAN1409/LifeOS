@@ -1,6 +1,7 @@
 plugins {
     id 'com.android.library'
     id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
     id 'com.google.devtools.ksp'
 }
 
@@ -10,6 +11,10 @@ ext.teyaRevision = 'b503872835ff3cafa8c399c4275e3e43c37d6577'
 ext.teyaGeneratedDir = layout.buildDirectory.dir('generated/upstreamAgentCore')
 ext.teyaAgentCore = [
     'com/teya/agent/brain/BrainClient.kt'      : 'f629548896225fe483fb38872903f4bbd0ee092b',
+    'com/teya/agent/brain/KtorClientFactory.kt': '7ed013eb150e649d79f72fd112931c40d73b83b4',
+    'com/teya/agent/brain/MistralClient.kt'    : '729e5d60475b7c57ce46a340552251e6d4dfb075',
+    'com/teya/agent/brain/MistralModels.kt'    : 'ae55b6067d71e38310defda5229235c35374fd70',
+    'com/teya/agent/brain/MistralVoices.kt'    : 'f9a233ec7a1bd3c1ec1021b581c43d18c6385ddd',
     'com/teya/agent/persona/ToolSpec.kt'       : '164252a81bfc600ac3e0d349d70214d2c9e31b44',
     'com/teya/agent/persona/AgentTools.kt'      : '1c82ca9c3d564cc823f8873d6b63cb03bde93196',
     'com/teya/agent/persona/TeyaPersona.kt'     : 'd7d348d7f250efdc6f0ef547f34c7e0283af1a60',
@@ -74,5 +79,12 @@ dependencies {
     implementation 'androidx.room:room-runtime:2.8.4'
     implementation 'androidx.room:room-ktx:2.8.4'
     ksp 'androidx.room:room-compiler:2.8.4'
+
+    implementation 'io.ktor:ktor-client-core:2.3.12'
+    implementation 'io.ktor:ktor-client-okhttp:2.3.12'
+    implementation 'io.ktor:ktor-client-content-negotiation:2.3.12'
+    implementation 'io.ktor:ktor-client-logging:2.3.12'
+    implementation 'io.ktor:ktor-client-websockets:2.3.12'
+    implementation 'io.ktor:ktor-serialization-kotlinx-json:2.3.12'
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1'
 }
