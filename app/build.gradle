@@ -8,8 +8,8 @@ android {
         applicationId 'com.kareem.lifeos'
         minSdk 26
         targetSdk 35
-        versionCode 25
-        versionName '0.9.9-V2-proactive-summaries'
+        versionCode 26
+        versionName '0.10.0-V2-ranked-proactive-feed'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 
