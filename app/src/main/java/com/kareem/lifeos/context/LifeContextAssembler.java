@@ -13,6 +13,7 @@ import java.util.Map;
  * Rules are intentionally source-neutral and conservative:
  * - observations are ordered by time;
  * - an episode is a continuous interaction stream with <=15 minute gaps;
+ * - interleaved streams do not break each other's episodes;
  * - situations merge episodes only when they share a non-application entity and are <=6 hours apart.
  * This avoids turning app identity alone into semantic identity.
  */
@@ -38,16 +39,29 @@ public final class LifeContextAssembler {
     }
 
     private static List<Episode> buildEpisodes(List<RawObservation> ordered) {
-        List<Episode> out = new ArrayList<Episode>();
-        EpisodeBuilder current = null;
+        List<EpisodeBuilder> completed = new ArrayList<EpisodeBuilder>();
+        Map<String,EpisodeBuilder> activeByStream = new LinkedHashMap<String,EpisodeBuilder>();
         for (RawObservation o : ordered) {
             if (o == null) continue;
-            if (current == null || !current.accepts(o)) {
-                if (current != null) out.add(current.finish());
-                current = new EpisodeBuilder(o);
-            } else current.add(o);
+            EpisodeBuilder active = activeByStream.get(o.streamId);
+            if (active == null) {
+                activeByStream.put(o.streamId, new EpisodeBuilder(o));
+            } else if (active.accepts(o)) {
+                active.add(o);
+            } else {
+                completed.add(active);
+                activeByStream.put(o.streamId, new EpisodeBuilder(o));
+            }
         }
-        if (current != null) out.add(current.finish());
+        completed.addAll(activeByStream.values());
+        List<Episode> out = new ArrayList<Episode>();
+        for (EpisodeBuilder b : completed) out.add(b.finish());
+        Collections.sort(out, new Comparator<Episode>() {
+            @Override public int compare(Episode a, Episode b) {
+                int t = Long.compare(a.startedAt, b.startedAt);
+                return t != 0 ? t : a.episodeId.compareTo(b.episodeId);
+            }
+        });
         return out;
     }
 
