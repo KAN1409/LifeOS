@@ -34,12 +34,15 @@
         android:theme="@style/Theme.LifeOS"
         android:usesCleartextTraffic="true">
 
-        <activity android:name=".MainActivity" android:exported="true">
+        <activity android:name=".FeedActivity" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity android:name=".FeedSectionActivity" android:exported="false" />
+        <activity android:name=".EvidenceDetailActivity" android:exported="false" />
+        <activity android:name=".MainActivity" android:exported="false" />
         <activity android:name=".SecondBrainActivity" android:exported="false" />
         <activity android:name=".LifeSignalsActivity" android:exported="false" />
         <activity android:name=".ActionCenterActivity" android:exported="false" />
