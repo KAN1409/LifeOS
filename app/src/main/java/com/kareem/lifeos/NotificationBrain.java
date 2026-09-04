@@ -53,6 +53,11 @@ final class NotificationBrain {
             synchronized(NotificationBrain.class){running=false;}
             Result delivered=result;
             if(listener!=null)new Handler(Looper.getMainLooper()).post(()->listener.onFinished(delivered));
+            // One run is bounded for responsiveness, but pending work must never starve behind a
+            // six-item batch limit. Continue automatically while AICore may legally run.
+            if("ready".equals(result.status)&&result.pending>0&&LifeOsApp.isAppForeground()){
+                analyzeForeground(app,null);
+            }
         });
     }
 
