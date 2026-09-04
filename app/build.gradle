@@ -3,21 +3,15 @@ plugins { id 'com.android.application' }
 android {
     namespace 'com.kareem.lifeos'
     compileSdk 35
-
     defaultConfig {
         applicationId 'com.kareem.lifeos'
         minSdk 26
         targetSdk 35
-        versionCode 35
-        versionName '0.10.9-V2-background-deep-brain'
+        versionCode 36
+        versionName '0.11.0-LifeOS-reference-ui'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
-
-    compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
-    }
-
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
     buildTypes {
         debug { versionNameSuffix '-debug' }
         release { minifyEnabled false; proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro' }
