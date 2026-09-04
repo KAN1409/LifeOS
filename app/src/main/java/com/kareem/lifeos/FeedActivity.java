@@ -6,6 +6,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
@@ -13,6 +15,7 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.kareem.lifeos.actions.PersistentActionQueue;
 import java.text.DateFormat;
 import java.util.ArrayList;
@@ -21,15 +24,73 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-/** Proactive home: durable attention first, legacy heuristics only as a conservative fallback. */
+/** Proactive home: prepared durable state first; pull-to-refresh verifies/drains intelligence. */
 public final class FeedActivity extends Activity {
     private static final int BG=Color.rgb(13,17,23),SURFACE=Color.rgb(22,27,34),BORDER=Color.rgb(48,54,61),TEXT=Color.rgb(230,237,243),MUTED=Color.rgb(139,148,158),GREEN=Color.rgb(63,185,80);
-    private LifeDb db;private LinearLayout content;
+    private LifeDb db;private LinearLayout content;private SwipeRefreshLayout swipe;private TextView intelligenceStatus;
+    private final Handler ui=new Handler(Looper.getMainLooper());
+    private final Runnable statusPoll=new Runnable(){@Override public void run(){
+        if(isFinishing()||intelligenceStatus==null)return;
+        IntelligenceStatus.Snapshot s=updateIntelligenceStatus();
+        if(swipe!=null&&swipe.isRefreshing()&&s.pending==0)swipe.setRefreshing(false);
+        if(s.pending>0||(swipe!=null&&swipe.isRefreshing()))ui.postDelayed(this,750);
+    }};
+
     @Override public void onCreate(Bundle s){super.onCreate(s);db=new LifeDb(this);render();}
-    @Override protected void onResume(){super.onResume();refresh();NotificationBrain.analyzeForeground(this,r->{if(!isFinishing()&&content!=null)refresh();});}
+    @Override protected void onResume(){
+        super.onResume();refresh();updateIntelligenceStatus();
+        // Register this surface for completion refresh. LifeOsApp already starts the same durable
+        // drain on every foreground surface, so Now is not the trigger anymore.
+        NotificationBrain.analyzeForeground(this,r->{if(!isFinishing()&&content!=null){refresh();updateIntelligenceStatus();if(swipe!=null&&r.pending==0)swipe.setRefreshing(false);}});
+        restartStatusPolling();
+    }
+    @Override protected void onPause(){ui.removeCallbacks(statusPoll);super.onPause();}
     @Override protected void onDestroy(){db.close();super.onDestroy();}
 
-    private void render(){LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);top.setPadding(dp(20),dp(14),dp(16),dp(10));top.setBackgroundColor(SURFACE);TextView title=text("LifeOS",24,TEXT);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);top.addView(title,new LinearLayout.LayoutParams(0,-2,1));Button more=secondary("•••");more.setContentDescription("Open diagnostics");more.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class)));top.addView(more,new LinearLayout.LayoutParams(dp(52),dp(48)));root.addView(top);root.addView(divider());ScrollView sc=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(16),dp(14),dp(16),dp(28));sc.addView(content);root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);}
+    private void render(){
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
+        LinearLayout top=new LinearLayout(this);top.setGravity(Gravity.CENTER_VERTICAL);top.setPadding(dp(20),dp(14),dp(16),dp(10));top.setBackgroundColor(SURFACE);
+        TextView title=text("LifeOS",24,TEXT);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        Button more=secondary("•••");more.setContentDescription("Open diagnostics");more.setOnClickListener(v->startActivity(new Intent(this,MainActivity.class)));top.addView(more,new LinearLayout.LayoutParams(dp(52),dp(48)));
+        root.addView(top);root.addView(divider());
+
+        intelligenceStatus=text("Checking intelligence…",11,MUTED);intelligenceStatus.setPadding(dp(18),dp(9),dp(18),dp(9));intelligenceStatus.setBackgroundColor(SURFACE);root.addView(intelligenceStatus,new LinearLayout.LayoutParams(-1,-2));root.addView(divider());
+
+        ScrollView sc=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(16),dp(14),dp(16),dp(28));sc.addView(content);
+        swipe=new SwipeRefreshLayout(this);swipe.setColorSchemeColors(GREEN);swipe.setProgressBackgroundColorSchemeColor(SURFACE);swipe.addView(sc,new SwipeRefreshLayout.LayoutParams(-1,-1));swipe.setOnRefreshListener(()->manualRefresh());
+        root.addView(swipe,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);
+    }
+
+    private void manualRefresh(){
+        refresh();updateIntelligenceStatus();
+        NotificationBrain.analyzeForeground(this,r->{
+            if(isFinishing()||content==null)return;
+            refresh();IntelligenceStatus.Snapshot s=updateIntelligenceStatus();
+            if(swipe!=null&&s.pending==0)swipe.setRefreshing(false);
+            restartStatusPolling();
+        });
+        restartStatusPolling();
+        // Never leave a spinner hanging when AICore is unavailable. Pending work remains durable
+        // and the status line keeps showing exactly how many items are still queued.
+        ui.postDelayed(()->{if(!isFinishing()&&swipe!=null&&swipe.isRefreshing()){swipe.setRefreshing(false);updateIntelligenceStatus();}},12000);
+    }
+
+    private IntelligenceStatus.Snapshot updateIntelligenceStatus(){
+        IntelligenceStatus.Snapshot s=IntelligenceStatus.snapshot(this);
+        if(intelligenceStatus!=null){
+            String line=s.line();
+            if(swipe!=null&&swipe.isRefreshing())line="Checking… · "+s.ready+" ready · "+s.pending+" pending"+(s.provisional>0?" · "+s.provisional+" provisional":"");
+            else if(s.pending==0)line=line+" · pull down to verify";
+            else line=line+" · safely queued";
+            intelligenceStatus.setText(line);intelligenceStatus.setTextColor(s.pending==0?GREEN:MUTED);
+        }
+        return s;
+    }
+
+    private void restartStatusPolling(){
+        ui.removeCallbacks(statusPoll);IntelligenceStatus.Snapshot s=updateIntelligenceStatus();
+        if(s.pending>0||(swipe!=null&&swipe.isRefreshing()))ui.postDelayed(statusPoll,750);
+    }
 
     private void refresh(){
         content.removeAllViews();
