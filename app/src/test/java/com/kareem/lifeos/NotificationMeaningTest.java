@@ -42,4 +42,11 @@ public final class NotificationMeaningTest {
         assertEquals("OTHER",m.type);assertEquals("NONE",m.intent);assertEquals("UNKNOWN",m.state);
         assertEquals("NONE",m.urgency);assertEquals("NONE",m.action);assertFalse(m.needsAttention());
     }
+
+    @Test public void nonPersonModelStatesUseBrainNamespace() {
+        assertEquals("brain_email",meaning("EMAIL","REQUEST","WAITING_ON_USER","MEDIUM","REPLY","Reply needed","",.9).loopKind());
+        assertEquals("brain_call",meaning("MISSED_CALL","ALERT","WAITING_ON_USER","MEDIUM","CALL_BACK","Missed call","",.9).loopKind());
+        assertEquals("brain_security",meaning("SECURITY_ALERT","ALERT","WAITING_ON_USER","HIGH","VERIFY","Verify sign-in","",.9).loopKind());
+        assertEquals("brain_calendar",meaning("CALENDAR_EVENT","SCHEDULE","WAITING_ON_USER","MEDIUM","REVIEW","Meeting tomorrow","",.9).loopKind());
+    }
 }
