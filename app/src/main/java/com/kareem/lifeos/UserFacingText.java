@@ -35,6 +35,8 @@ final class UserFacingText {
         x=x.replaceAll("(?i)\\bfor the user\\b","for you");
         x=x.replaceAll("(?i)\\bthe user\\b","you");
         x=x.replaceAll("(?i)(^|(?<=[.!?]\\s))User\\b","You");
+        if(x.regionMatches(true,0,"you ",0,4))x="You "+x.substring(4);
+        if(x.regionMatches(true,0,"your ",0,5))x="Your "+x.substring(5);
         return x;
     }
 }
