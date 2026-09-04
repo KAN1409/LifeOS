@@ -38,6 +38,9 @@ public final class LifeNotificationListener extends NotificationListenerService 
             StatusBarNotification[] active=getActiveNotifications();
             if(active!=null)for(StatusBarNotification sbn:active)processNotification(sbn);
         }catch(Throwable ignored){}
+        // Also drain durable work that survived a process restart even if no active notification
+        // remains in the Android shade.
+        try{BackgroundBrain.poke(this);}catch(Throwable ignored){}
     }
 
     /** Ask Android to restore the listener binding after a transient process/service disconnect. */
@@ -140,9 +143,9 @@ public final class LifeNotificationListener extends NotificationListenerService 
             for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);
             LocalGroundedMemory.materialize(this,event);
 
-            // AICore permits deep inference only while LifeOS is foreground. If it already is,
-            // consume the queue immediately; otherwise FeedActivity will drain it on next resume.
-            if(LifeOsApp.isAppForeground())NotificationBrain.analyzeForeground(this,null);
+            // Primary deep semantics now starts directly from notification ingress and is not
+            // coupled to any Activity or Now-page lifecycle.
+            BackgroundBrain.poke(this);
             return true;
         }
         return false;
