@@ -12,10 +12,17 @@ public final class LifeOsApp extends Application {
     @Override public void onCreate() {
         super.onCreate();
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks(){
-            @Override public void onActivityCreated(Activity a,Bundle b){}
+            @Override public void onActivityCreated(Activity a,Bundle b){
+                // Android 15+ lays targetSdk 35 apps edge-to-edge. Apply real device insets
+                // globally so headers never sit under the clock, battery, camera cutout or nav bar.
+                try{SystemBars.apply(a);}catch(Throwable ignored){}
+            }
             @Override public void onActivityStarted(Activity a){}
             @Override public void onActivityResumed(Activity a){
                 synchronized(LifeOsApp.class){resumedActivities++;}
+                // Re-request insets after the activity has installed its content view. This also
+                // handles rotation and system-bar mode changes without fixed device padding.
+                try{SystemBars.apply(a);}catch(Throwable ignored){}
                 // Deep AICore inference is legal only while LifeOS is genuinely foreground.
                 // Trigger from every resumed LifeOS surface so Now never owns the brain lifecycle.
                 try{NotificationBrain.analyzeForeground(a,null);}catch(Throwable ignored){}
