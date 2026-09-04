@@ -42,8 +42,14 @@ final class ProactiveFeedEngine {
         ArrayList<Suggestion> out=new ArrayList<>();
         if(loops==null)return out;
         for(LifeDb.Loop loop:loops){LifeDb.Event event=db.eventById(loop.evidenceId);if(event==null)continue;String who=LifeDb.isConversationLike(event)?LifeDb.personLabel(event):LifeDb.friendlyApp(event.app);String quote=clip(loop.title,72),title,why;
-            if("security".equals(loop.kind)){title="Verify the account security change";why=quote;}
-            else if("financial_alert".equals(loop.kind)){title="Review the card or payment exception";why=quote;}
+            if("security".equals(loop.kind)||"brain_security".equals(loop.kind)){title="Verify the account security change";why=quote;}
+            else if("financial_alert".equals(loop.kind)||"brain_financial".equals(loop.kind)){title="Review the payment or account exception";why=quote;}
+            else if("brain_call".equals(loop.kind)){title="Review the missed call";why=who+" · "+quote;}
+            else if("brain_email".equals(loop.kind)){title="Handle the email that needs you";why=who+" · "+quote;}
+            else if("brain_calendar".equals(loop.kind)){title="Review the scheduled event";why=who+" · "+quote;}
+            else if("brain_reminder".equals(loop.kind)){title="Handle the reminder";why=quote;}
+            else if("brain_transaction".equals(loop.kind)){title="Review the transaction";why=quote;}
+            else if("brain_delivery".equals(loop.kind)){title="Review the delivery update";why=quote;}
             else if("deadline".equals(loop.kind)){title="Handle the dated obligation";why=quote+(loop.dueAt>0?" · due date detected":"");}
             else if("appointment".equals(loop.kind)){title="Review the scheduled plan";why=who+" · "+quote;}
             else if("commitment".equals(loop.kind)){title="Follow up on the commitment";why=who+" · "+quote;}
@@ -57,7 +63,7 @@ final class ProactiveFeedEngine {
     static DaySummary daySummary(List<RankedConversation> ranked,List<LifeDb.Loop> attention,int persistentActions){
         int requests=0,commitments=0,deadlines=0,alerts=0,active=0;
         for(RankedConversation r:ranked)if(r.conversation.latestAt>=System.currentTimeMillis()-24*60*60*1000L)active++;
-        if(attention!=null)for(LifeDb.Loop loop:attention){if("request".equals(loop.kind))requests++;else if("commitment".equals(loop.kind))commitments++;else if("deadline".equals(loop.kind)||"appointment".equals(loop.kind))deadlines++;else if("security".equals(loop.kind)||"financial_alert".equals(loop.kind))alerts++;}
+        if(attention!=null)for(LifeDb.Loop loop:attention){String k=loop.kind==null?"":loop.kind;if("request".equals(k)||"question".equals(k)||"brain_email".equals(k)||"brain_call".equals(k)||"brain_reminder".equals(k))requests++;else if("commitment".equals(k))commitments++;else if("deadline".equals(k)||"appointment".equals(k)||"brain_calendar".equals(k))deadlines++;else if("security".equals(k)||"financial_alert".equals(k)||"brain_security".equals(k)||"brain_financial".equals(k)||"brain_transaction".equals(k)||"brain_delivery".equals(k))alerts++;}
         int needs=attention==null?0:attention.size();
         String headline=needs>0?needs+" thing"+(needs==1?"":"s")+" worth checking":"Nothing urgent surfaced today";
         String detail="";
@@ -69,6 +75,6 @@ final class ProactiveFeedEngine {
         if(detail.isEmpty())detail=active+" active conversations";
         return new DaySummary(headline,detail);
     }
-    private static String displayKind(String kind){if("financial_alert".equals(kind))return "FINANCIAL";return kind==null?"ACTION":kind.toUpperCase();}
+    private static String displayKind(String kind){if(kind==null)return "ACTION";if("financial_alert".equals(kind)||"brain_financial".equals(kind))return "FINANCIAL";if(kind.startsWith("brain_"))return kind.substring(6).replace('_',' ').toUpperCase();return kind.toUpperCase();}
     private static String clip(String value,int max){String x=value==null?"":value.trim();return x.length()>max?x.substring(0,max)+"…":x;}
 }
