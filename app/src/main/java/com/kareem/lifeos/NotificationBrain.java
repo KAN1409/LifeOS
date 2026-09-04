@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -127,6 +126,8 @@ final class NotificationBrain {
         // Deep meaning may reject/replace legacy guesses for THIS evidence only. It can never
         // silently close another request from the same person/thread.
         sql.execSQL("UPDATE open_loops SET status='superseded' WHERE status='open' AND evidence_id=?",new Object[]{eventId});
+        AttentionStore.Item current=attention.forEvent(eventId);
+        if(current!=null&&AttentionStore.HANDLED.equals(current.status))return false;
         if(!compatible)return false;
 
         String kind=meaning.loopKind();String fingerprint="brain|"+meaning.sourceObservationId;long now=System.currentTimeMillis();
