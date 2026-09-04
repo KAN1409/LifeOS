@@ -45,7 +45,7 @@ object BackgroundSemanticRuntime {
                 "You are LifeOS background semantic classification. Return only the requested JSON. " +
                     "Never invent facts, people, dates, urgency, actions, outcomes, or obligations."
             ),
-            samplerConfig = SamplerConfig(temperature = 0.0f, topK = 1, topP = 1.0f),
+            samplerConfig = SamplerConfig(temperature = 0.0, topK = 1, topP = 1.0),
         )
         current.createConversation(config).use { conversation ->
             return conversation.sendMessage(prompt).contents.toString().trim()
