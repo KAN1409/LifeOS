@@ -8,12 +8,16 @@ import java.util.Map;
 public final class NotificationObservationAdapter implements ObservationAdapter<NotificationCapture> {
     @Override public RawObservation adapt(NotificationCapture n) {
         if (n == null) return null;
-        String stream = n.packageName + "|" +
-                (n.conversationTitle.isEmpty() ? n.title : n.conversationTitle)
-                        .toLowerCase(Locale.ROOT).trim();
+        String stream = n.packageName + "|" + n.streamLabel().toLowerCase(Locale.ROOT).trim();
         Map<String,String> attrs = new HashMap<String,String>();
         attrs.put("title", n.title);
         attrs.put("conversation_title", n.conversationTitle);
+        attrs.put("sender", n.sender);
+        attrs.put("category", n.category);
+        attrs.put("channel_id", n.channelId);
+        attrs.put("group_conversation", Boolean.toString(n.groupConversation));
+        attrs.put("ongoing", Boolean.toString(n.ongoing));
+        attrs.put("structured_message", Boolean.toString(!n.sender.isEmpty() || !n.conversationTitle.isEmpty()));
         return new RawObservation(
                 "notification|" + n.key,
                 RawObservation.SourceKind.NOTIFICATION,
