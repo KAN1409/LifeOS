@@ -3,9 +3,7 @@ package com.kareem.lifeos;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /** Ranks conversation situations and derives proactive suggestions/day summary from grounded evidence. */
 final class ProactiveFeedEngine {
@@ -17,9 +15,9 @@ final class ProactiveFeedEngine {
     }
     static final class Suggestion {
         final String title,why,kind;
-        final long eventId;
+        final long eventId,loopId;
         final int score;
-        Suggestion(String title,String why,String kind,long eventId,int score){this.title=title;this.why=why;this.kind=kind;this.eventId=eventId;this.score=score;}
+        Suggestion(String title,String why,String kind,long eventId,long loopId,int score){this.title=title;this.why=why;this.kind=kind;this.eventId=eventId;this.loopId=loopId;this.score=score;}
     }
     static final class DaySummary {
         final String headline,detail;
@@ -40,32 +38,37 @@ final class ProactiveFeedEngine {
         return out;
     }
 
-    static List<Suggestion> suggestions(List<RankedConversation> ranked){
+    static List<Suggestion> suggestions(LifeDb db,List<LifeDb.Loop> loops){
         ArrayList<Suggestion> out=new ArrayList<>();
-        for(RankedConversation r:ranked){
-            List<String> signals=r.summary.signals;
-            String title=null,why=null,kind=null;int score=r.score;
-            if(signals.contains("request")){title="Review what "+r.conversation.label+" asked for";why="A request was detected in this conversation.";kind="REQUEST";score+=8;}
-            else if(signals.contains("commitment")){title="Follow up on the commitment with "+r.conversation.label;why="A commitment was mentioned and may still be open.";kind="COMMITMENT";score+=7;}
-            else if(signals.contains("question")){title="Check the unanswered question from "+r.conversation.label;why="A question appears in the recent conversation.";kind="QUESTION";score+=5;}
-            else if(signals.contains("schedule")){title="Review the plan mentioned with "+r.conversation.label;why="A time-sensitive plan or schedule was detected.";kind="SCHEDULE";score+=4;}
-            if(title!=null)out.add(new Suggestion(title,why,kind,r.conversation.latestEventId,score));
+        if(loops==null)return out;
+        for(LifeDb.Loop loop:loops){LifeDb.Event event=db.eventById(loop.evidenceId);if(event==null)continue;String who=LifeDb.isConversationLike(event)?LifeDb.personLabel(event):LifeDb.friendlyApp(event.app);String quote=clip(loop.title,72),title,why;
+            if("security".equals(loop.kind)){title="Verify the account security change";why=quote;}
+            else if("financial_alert".equals(loop.kind)){title="Review the card or payment exception";why=quote;}
+            else if("deadline".equals(loop.kind)){title="Handle the dated obligation";why=quote+(loop.dueAt>0?" · due date detected":"");}
+            else if("appointment".equals(loop.kind)){title="Review the scheduled plan";why=who+" · "+quote;}
+            else if("commitment".equals(loop.kind)){title="Follow up on the commitment";why=who+" · "+quote;}
+            else{title="Respond to "+who;why=quote;}
+            out.add(new Suggestion(title,why,displayKind(loop.kind),loop.evidenceId,loop.id,loop.priority));
         }
         Collections.sort(out,new Comparator<Suggestion>(){@Override public int compare(Suggestion a,Suggestion b){return Integer.compare(b.score,a.score);}});
         return out;
     }
 
     static DaySummary daySummary(List<RankedConversation> ranked,List<LifeDb.Loop> attention,int persistentActions){
-        int requests=0,commitments=0,questions=0,schedules=0,active=0;
-        for(RankedConversation r:ranked){if(r.conversation.latestAt>=System.currentTimeMillis()-24*60*60*1000L)active++;if(r.summary.signals.contains("request"))requests++;if(r.summary.signals.contains("commitment"))commitments++;if(r.summary.signals.contains("question"))questions++;if(r.summary.signals.contains("schedule"))schedules++;}
+        int requests=0,commitments=0,deadlines=0,alerts=0,active=0;
+        for(RankedConversation r:ranked)if(r.conversation.latestAt>=System.currentTimeMillis()-24*60*60*1000L)active++;
+        if(attention!=null)for(LifeDb.Loop loop:attention){if("request".equals(loop.kind))requests++;else if("commitment".equals(loop.kind))commitments++;else if("deadline".equals(loop.kind)||"appointment".equals(loop.kind))deadlines++;else if("security".equals(loop.kind)||"financial_alert".equals(loop.kind))alerts++;}
         int needs=attention==null?0:attention.size();
-        String headline=needs>0?needs+" things need attention":(requests+commitments+questions+schedules>0?"Your day has a few open signals":"Nothing urgent surfaced today");
-        String detail=active+" active conversations";
-        if(requests>0)detail+=" · "+requests+" requests";
-        if(commitments>0)detail+=" · "+commitments+" commitments";
-        if(questions>0)detail+=" · "+questions+" questions";
-        if(schedules>0)detail+=" · "+schedules+" plans";
-        if(persistentActions>0)detail+=" · "+persistentActions+" agent actions";
+        String headline=needs>0?needs+" thing"+(needs==1?"":"s")+" worth checking":"Nothing urgent surfaced today";
+        String detail="";
+        if(alerts>0)detail+=alerts+" important alert"+(alerts==1?"":"s");
+        if(deadlines>0)detail+=(detail.isEmpty()?"":" · ")+deadlines+" dated item"+(deadlines==1?"":"s");
+        if(requests>0)detail+=(detail.isEmpty()?"":" · ")+requests+" request"+(requests==1?"":"s");
+        if(commitments>0)detail+=(detail.isEmpty()?"":" · ")+commitments+" commitment"+(commitments==1?"":"s");
+        if(persistentActions>0)detail+=(detail.isEmpty()?"":" · ")+persistentActions+" agent action"+(persistentActions==1?"":"s");
+        if(detail.isEmpty())detail=active+" active conversations";
         return new DaySummary(headline,detail);
     }
+    private static String displayKind(String kind){if("financial_alert".equals(kind))return "FINANCIAL";return kind==null?"ACTION":kind.toUpperCase();}
+    private static String clip(String value,int max){String x=value==null?"":value.trim();return x.length()>max?x.substring(0,max)+"…":x;}
 }

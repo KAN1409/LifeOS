@@ -45,8 +45,8 @@ public final class MainActivity extends Activity {
     private void render(){
         LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);
         LinearLayout top=new LinearLayout(this);top.setOrientation(LinearLayout.VERTICAL);top.setPadding(dp(16),dp(18),dp(16),dp(14));top.setBackgroundColor(SURFACE);
-        TextView title=text("LifeOS",22,TEXT);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);top.addView(title);
-        TextView subtitle=text("V2 Agent Runtime · Teya + SecondBrain + Graphiti",12,MUTED);subtitle.setPadding(0,dp(2),0,0);top.addView(subtitle);
+        TextView title=text("Diagnostics",22,TEXT);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);top.addView(title);
+        TextView subtitle=text("Advanced LifeOS runtime and capture status",12,MUTED);subtitle.setPadding(0,dp(2),0,0);top.addView(subtitle);
         root.addView(top,new LinearLayout.LayoutParams(-1,-2));root.addView(divider());
 
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);body.setPadding(dp(16),dp(14),dp(16),0);
@@ -55,7 +55,7 @@ public final class MainActivity extends Activity {
         LinearLayout accessRow=new LinearLayout(this);accessRow.setOrientation(LinearLayout.HORIZONTAL);accessRow.setPadding(0,dp(12),0,dp(8));
         Button access=secondary("Notification access");access.setOnClickListener(v->startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")));
         Button screen=secondary("Screen context");screen.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
-        accessRow.addView(access,new LinearLayout.LayoutParams(0,dp(42),1));LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(0,dp(42),1);rp.setMargins(dp(8),0,0,0);accessRow.addView(screen,rp);body.addView(accessRow);
+        accessRow.addView(access,new LinearLayout.LayoutParams(0,dp(48),1));LinearLayout.LayoutParams rp=new LinearLayout.LayoutParams(0,dp(48),1);rp.setMargins(dp(8),0,0,0);accessRow.addView(screen,rp);body.addView(accessRow);
 
         LinearLayout agent=row();
         TextView agentTitle=text("Agent runtime",15,TEXT);agentTitle.setTypeface(Typeface.DEFAULT,Typeface.BOLD);agent.addView(agentTitle);
@@ -64,19 +64,19 @@ public final class MainActivity extends Activity {
         Button configure=secondary("Brain key");configure.setOnClickListener(v->configureBrain());
         Button start=secondary("Start agent");start.setOnClickListener(v->prepareAgent("start"));
         Button talk=primary("Talk now");talk.setOnClickListener(v->prepareAgent("talk"));
-        agentActions.addView(configure,new LinearLayout.LayoutParams(0,dp(42),1));LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,dp(42),1);ap.setMargins(dp(7),0,0,0);agentActions.addView(start,ap);LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(42),1);tp.setMargins(dp(7),0,0,0);agentActions.addView(talk,tp);agent.addView(agentActions);
-        Button intelligence=secondary("Life Intelligence  →");intelligence.setOnClickListener(v->startActivity(new Intent(this,SecondBrainActivity.class)));LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,dp(44));ip.setMargins(0,dp(9),0,0);agent.addView(intelligence,ip);
-        Button signals=secondary("Life Signals · Social Radar + Decisions  →");signals.setOnClickListener(v->startActivity(new Intent(this,LifeSignalsActivity.class)));LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,dp(44));sp.setMargins(0,dp(8),0,0);agent.addView(signals,sp);
-        Button actions=secondary("Action Center · approval gate  →");actions.setOnClickListener(v->startActivity(new Intent(this,ActionCenterActivity.class)));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(-1,dp(44));xp.setMargins(0,dp(8),0,0);agent.addView(actions,xp);
+        agentActions.addView(configure,new LinearLayout.LayoutParams(0,dp(48),1));LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(0,dp(48),1);ap.setMargins(dp(7),0,0,0);agentActions.addView(start,ap);LinearLayout.LayoutParams tp=new LinearLayout.LayoutParams(0,dp(48),1);tp.setMargins(dp(7),0,0,0);agentActions.addView(talk,tp);agent.addView(agentActions);
+        Button intelligence=secondary("Life Intelligence  →");intelligence.setOnClickListener(v->startActivity(new Intent(this,SecondBrainActivity.class).putExtra("advanced",true)));LinearLayout.LayoutParams ip=new LinearLayout.LayoutParams(-1,dp(48));ip.setMargins(0,dp(9),0,0);agent.addView(intelligence,ip);
+        Button signals=secondary("Life Signals · Social Radar + Decisions  →");signals.setOnClickListener(v->startActivity(new Intent(this,LifeSignalsActivity.class).putExtra("advanced",true)));LinearLayout.LayoutParams sp=new LinearLayout.LayoutParams(-1,dp(48));sp.setMargins(0,dp(8),0,0);agent.addView(signals,sp);
+        Button actions=secondary("Action Center · approval gate  →");actions.setOnClickListener(v->startActivity(new Intent(this,ActionCenterActivity.class)));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(-1,dp(48));xp.setMargins(0,dp(8),0,0);agent.addView(actions,xp);
         body.addView(agent);
         root.addView(body,new LinearLayout.LayoutParams(-1,-2));
 
         LinearLayout tabs=new LinearLayout(this);tabs.setOrientation(LinearLayout.HORIZONTAL);tabs.setPadding(dp(8),0,dp(8),0);tabs.setBackgroundColor(BG);
         recent=tab("Activity");canonical=tab("Understanding");loops=tab("Attention");
-        tabs.addView(recent,new LinearLayout.LayoutParams(0,dp(46),1));tabs.addView(canonical,new LinearLayout.LayoutParams(0,dp(46),1));tabs.addView(loops,new LinearLayout.LayoutParams(0,dp(46),1));root.addView(tabs);root.addView(divider());
+        tabs.addView(recent,new LinearLayout.LayoutParams(0,dp(48),1));tabs.addView(canonical,new LinearLayout.LayoutParams(0,dp(48),1));tabs.addView(loops,new LinearLayout.LayoutParams(0,dp(48),1));root.addView(tabs);root.addView(divider());
 
         ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(dp(16),dp(12),dp(16),dp(20));scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        LinearLayout footer=new LinearLayout(this);footer.setPadding(dp(16),dp(8),dp(16),dp(12));footer.setBackgroundColor(SURFACE);Button erase=secondary("Erase local preview data");erase.setTextColor(RED);erase.setOnClickListener(v->confirmErase());footer.addView(erase,new LinearLayout.LayoutParams(-1,dp(42)));root.addView(divider());root.addView(footer);
+        LinearLayout footer=new LinearLayout(this);footer.setPadding(dp(16),dp(8),dp(16),dp(12));footer.setBackgroundColor(SURFACE);Button erase=secondary("Erase local preview data");erase.setTextColor(RED);erase.setOnClickListener(v->confirmErase());footer.addView(erase,new LinearLayout.LayoutParams(-1,dp(48)));root.addView(divider());root.addView(footer);
 
         recent.setOnClickListener(v->showRecent());canonical.setOnClickListener(v->showCanonical());loops.setOnClickListener(v->showLoops());setContentView(root);refresh();
     }
@@ -104,19 +104,19 @@ public final class MainActivity extends Activity {
         boolean enabled=notifications!=null&&notifications.contains(getPackageName()),screen=services!=null&&services.contains(getPackageName()+"/"+LifeScreenContextService.class.getName());
         PersistentUnderstandingStore u=PersistentUnderstandingStore.get(this);String version=u.canonicalEngineVersion();if(blank(version))version="pending";
         int raw=UniversalObservationStore.get(this).count(),memories=PersistentLifeMemoryStore.get(this).searchable().size();boolean brain=new ConfigManager(this).isConfigured();
-        status.setText((enabled?"●":"○")+" notifications   "+(screen?"●":"○")+" screen context   "+(brain?"●":"○")+" agent brain\n"+raw+" raw observations  ·  "+memories+" grounded memories  ·  "+db.count("open_loops")+" attention items\nengine "+version+"  ·  Teya Harness imported  ·  SecondBrain + Graphiti + approval gate ready");
+        status.setText((enabled?"●":"○")+" notifications   "+(screen?"●":"○")+" screen context   "+(brain?"●":"○")+" agent brain\n"+raw+" raw observations  ·  "+memories+" grounded memories  ·  "+db.openLoopCount()+" open attention items\nengine "+version+"  ·  Teya Harness imported  ·  SecondBrain + Graphiti + approval gate ready");
         status.setTextColor(enabled||screen||brain?GREEN:MUTED);showRecent();
     }
 
     private void showRecent(){select(recent);content.removeAllViews();section("Activity","Recent captured evidence");List<LifeDb.Event> xs=db.recentEvents(100);if(xs.isEmpty()){empty("No captured activity yet. Turn on notification or screen context access.");return;}for(LifeDb.Event x:xs){LinearLayout row=row();TextView t=text(blank(x.title)?friendlyApp(x.app):x.title,15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);row.addView(t);TextView body=text(x.body,13,TEXT);body.setPadding(0,dp(5),0,0);row.addView(body);row.addView(meta(friendlyApp(x.app)+" · "+formatTime(x.at)));content.addView(row);}}
     private void showCanonical(){select(canonical);content.removeAllViews();PersistentUnderstandingStore u=PersistentUnderstandingStore.get(this);List<CanonicalEventRecord> xs=u.recentCanonical(100);long rebuilt=u.canonicalRebuiltAt();section("Understanding","Canonical interpretation · raw evidence remains replayable");if(rebuilt>0)content.addView(meta("Rebuilt "+formatTime(rebuilt)+" · provenance preserved"));if(xs.isEmpty()){empty("No canonical events yet.");return;}for(CanonicalEventRecord x:xs){LinearLayout row=row();row.addView(badge(x.direction.name()+" · "+x.type));TextView body=text(x.text,14,TEXT);body.setPadding(0,dp(7),0,0);row.addView(body);row.addView(meta(x.sources+" · confidence "+Math.round(x.confidence*100)+"% · "+formatTime(x.observedAt)));content.addView(row);}}
-    private void showLoops(){select(loops);content.removeAllViews();List<LifeDb.Loop> xs=db.openLoops(100);section("Attention","Things that may need action");if(xs.isEmpty()){empty("Nothing needs attention yet. Open Life Intelligence for SecondBrain commitments and briefing.");return;}for(LifeDb.Loop x:xs){LinearLayout row=row();row.addView(badge(x.kind.toUpperCase()));TextView title=text(x.title,15,TEXT);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);title.setPadding(0,dp(7),0,dp(9));row.addView(title);Button done=secondary("Mark done");done.setOnClickListener(v->{db.closeLoop(x.id);showLoops();});row.addView(done,new LinearLayout.LayoutParams(-1,dp(40)));content.addView(row);}}
+    private void showLoops(){select(loops);content.removeAllViews();List<LifeDb.Loop> xs=db.openLoops(100);section("Attention","Ranked unresolved items from grounded evidence");if(xs.isEmpty()){empty("No unresolved item needs attention right now.");return;}for(LifeDb.Loop x:xs){LinearLayout row=row();row.addView(badge(x.kind.replace('_',' ').toUpperCase()));LifeDb.Event e=db.eventById(x.evidenceId);String who=e==null?"":(LifeDb.isConversationLike(e)?LifeDb.personLabel(e):LifeDb.friendlyApp(e.app));TextView title=text((who.isEmpty()?"":who+" · ")+x.title,15,TEXT);title.setTypeface(Typeface.DEFAULT,Typeface.BOLD);title.setPadding(0,dp(7),0,dp(9));row.addView(title);row.addView(meta("priority "+x.priority+" · confidence "+Math.round(x.confidence*100)+"%"));Button done=secondary("Mark done");done.setOnClickListener(v->{db.closeLoop(x.id);showLoops();});row.addView(done,new LinearLayout.LayoutParams(-1,dp(48)));content.addView(row);}}
 
     private void confirmErase(){new AlertDialog.Builder(this).setTitle("Erase preview data?").setMessage("This deletes legacy and V2 data stored by this install.").setNegativeButton("Cancel",null).setPositiveButton("Erase",(d,w)->{db.eraseAll();PersistentUnderstandingStore.get(this).eraseAllUnderstanding();UniversalObservationStore.get(this).eraseAll();PersistentLifeMemoryStore.get(this).eraseAll();refresh();}).show();}
     private void section(String title,String subtitle){TextView t=text(title,20,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);content.addView(t);TextView s=text(subtitle,12,MUTED);s.setPadding(0,dp(2),0,dp(12));content.addView(s);}
     private void empty(String x){LinearLayout r=row();TextView v=text(x,14,MUTED);v.setPadding(0,dp(4),0,dp(4));r.addView(v);content.addView(r);}
     private LinearLayout row(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(14),dp(13),dp(14),dp(13));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,dp(8));c.setLayoutParams(p);c.setBackground(round(SURFACE,BORDER,8));return c;}
-    private TextView badge(String x){TextView v=text(x,11,GREEN);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setPadding(dp(8),dp(4),dp(8),dp(4));v.setBackground(round(Color.TRANSPARENT,GREEN,20));return v;}
+    private TextView badge(String x){TextView v=text(x,11,GREEN);v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);v.setPadding(dp(8),dp(4),dp(8),dp(4));v.setLayoutParams(new LinearLayout.LayoutParams(-2,-2));v.setBackground(round(Color.TRANSPARENT,GREEN,20));return v;}
     private TextView meta(String x){TextView v=text(x,11,MUTED);v.setPadding(0,dp(8),0,0);return v;}
     private Button secondary(String x){Button b=new Button(this);b.setText(x);b.setTextColor(TEXT);b.setTextSize(12);b.setAllCaps(false);b.setGravity(Gravity.CENTER);b.setBackground(round(SURFACE,BORDER,7));return b;}
     private Button primary(String x){Button b=secondary(x);b.setBackground(round(BLUE,BLUE,7));b.setTextColor(Color.WHITE);return b;}

@@ -36,16 +36,18 @@ public final class LifeNotificationListener extends NotificationListenerService 
 
     private boolean store(LifeDb db,String key,String app,String title,String conversation,String body,String thread,long at){
         if(isSensitive(title+" "+body)||CapturePolicy.isNotificationSummary(body))return false;
+        String effectiveThread=thread;String participant=participant(title,conversation,body);if(!participant.isEmpty())effectiveThread=app+"|"+participant.toLowerCase(Locale.ROOT).trim();
 
         // V2 shadow path: preserve source facts before semantic interpretation.
         RawObservation raw=V2_ADAPTER.adapt(new NotificationCapture(key,app,title,conversation,body,at));
         UniversalObservationStore.get(this).append(raw);
 
         // Existing M1 path remains intact until V2 proves equivalent/better.
-        NotificationUnderstandingProbe.observe(this,thread,body,at,key);
-        long id=db.upsertEvent(key,app,title,body,thread,at);
+        NotificationUnderstandingProbe.observe(this,effectiveThread,body,at,key);
+        long id=db.upsertEvent(key,app,title,body,effectiveThread,at);
         if(id>0){List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(title,body,System.currentTimeMillis());for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);return true;}return false;
     }
+    private static String participant(String title,String conversation,String body){if(conversation!=null&&!conversation.trim().isEmpty())return conversation.trim();String t=title==null?"":title.trim(),low=t.toLowerCase(Locale.ROOT);if(!low.equals("whatsapp")&&!low.equals("messenger")&&!low.equals("telegram")&&!low.contains("new message"))return "";int colon=body==null?-1:body.indexOf(':');if(colon>1&&colon<80)return body.substring(0,colon).trim();return "";}
     private static boolean isSensitive(String s){String x=s.toLowerCase(Locale.ROOT);return x.contains("otp")||x.contains("one-time password")||x.contains("verification code")||x.contains("رمز التحقق")||x.contains("كود التحقق");}
     private static String text(CharSequence x){return x==null?"":x.toString().trim();}
     private static String sha(String value){try{byte[] b=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));StringBuilder x=new StringBuilder();for(byte q:b)x.append(String.format(Locale.US,"%02x",q));return x.toString();}catch(Exception e){return Integer.toHexString(value.hashCode());}}

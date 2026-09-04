@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.Application;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
+import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -77,7 +78,7 @@ public final class ExperienceAudit {
             int w=Math.max(1,root.getWidth()),h=Math.max(1,root.getHeight());
             Bitmap bmp=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);root.draw(new Canvas(bmp));
             try(FileOutputStream out=new FileOutputStream(new File(s.dir,base+".png"))){bmp.compress(Bitmap.CompressFormat.PNG,100,out);}bmp.recycle();
-            JSONObject screen=new JSONObject();screen.put("label",target.label);screen.put("activity",a.getClass().getName());screen.put("captured_at",System.currentTimeMillis());screen.put("width",w);screen.put("height",h);screen.put("view_tree",viewJson(root));screen.put("visible_text",visibleText(root));
+            JSONObject screen=new JSONObject();screen.put("label",target.label);screen.put("activity",a.getClass().getName());screen.put("captured_at",System.currentTimeMillis());screen.put("width",w);screen.put("height",h);screen.put("view_tree",viewJson(root));screen.put("visible_text",visibleText(root,true));screen.put("rendered_text",visibleText(root,false));
             writeJson(new File(s.dir,base+".json"),screen);
             synchronized(ExperienceAudit.class){if(session==s)s.index++;}
         }catch(Throwable t){
@@ -92,6 +93,10 @@ public final class ExperienceAudit {
         else if(label.contains("Diagnostics Attention"))text="Attention";
         else if(label.contains("Social Radar"))text="Social Radar";
         else if(label.contains("Decision Memory"))text="Decision Memory";
+        else if(label.contains("Life Intelligence People"))text="People";
+        else if(label.contains("Life Intelligence Attention"))text="Attention";
+        else if(label.contains("Life Intelligence Briefing"))text="Briefing";
+        else if(label.contains("Action Center History"))text="History";
         if(text!=null){View v=findText(root,text);if(v!=null)v.performClick();}
     }
     private static boolean needsAsyncWait(String label){return label.contains("Social Radar")||label.contains("Decision Memory")||label.contains("Life Intelligence");}
@@ -101,10 +106,11 @@ public final class ExperienceAudit {
         JSONObject j=new JSONObject();
         try{
             LifeDb db=new LifeDb(a);j.put("package",a.getPackageName());j.put("version_name",a.getPackageManager().getPackageInfo(a.getPackageName(),0).versionName);j.put("version_code",a.getPackageManager().getPackageInfo(a.getPackageName(),0).getLongVersionCode());
-            j.put("raw_observations",UniversalObservationStore.get(a).count());j.put("grounded_memories",PersistentLifeMemoryStore.get(a).searchable().size());j.put("canonical_engine",PersistentUnderstandingStore.get(a).canonicalEngineVersion());j.put("attention_items",db.count("open_loops"));j.put("agent_actions",new PersistentActionQueue(a).pending().size());j.put("agent_brain_configured",new ConfigManager(a).isConfigured());
-            JSONArray events=new JSONArray();for(LifeDb.Event e:db.recentEvents(30)){JSONObject x=new JSONObject();x.put("id",e.id);x.put("app",e.app);x.put("title",e.title);x.put("body",e.body);x.put("at",e.at);events.put(x);}j.put("recent_events",events);
-            JSONArray loops=new JSONArray();for(LifeDb.Loop l:db.openLoops(30)){JSONObject x=new JSONObject();x.put("id",l.id);x.put("kind",l.kind);x.put("title",l.title);x.put("evidence_id",l.evidenceId);loops.put(x);}j.put("open_loops",loops);
-            List<PersistentActionQueue.Item> actions=new PersistentActionQueue(a).pending();List<SituationEngine.Situation> situations=SituationEngine.build(db,db.openLoops(50),actions,System.currentTimeMillis());JSONArray ss=new JSONArray();for(SituationEngine.Situation q:situations){JSONObject x=new JSONObject();x.put("id",q.id);x.put("title",q.title);x.put("status",q.status);x.put("summary",q.summary);x.put("why",q.why);x.put("priority",q.score);x.put("evidence",q.eventCount);x.put("attention",q.attentionCount);x.put("actions",q.actionCount);ss.put(x);}j.put("situations",ss);db.close();
+            List<LifeDb.Loop> openLoops=db.openLoops(100);List<LifeDb.Conversation> conversations=db.recentConversations(100);j.put("raw_observations",UniversalObservationStore.get(a).count());j.put("grounded_memories",PersistentLifeMemoryStore.get(a).searchable().size());j.put("canonical_engine",PersistentUnderstandingStore.get(a).canonicalEngineVersion());j.put("attention_items",openLoops.size());j.put("conversation_count",conversations.size());j.put("decision_count",db.count("decisions"));j.put("agent_actions",new PersistentActionQueue(a).pending().size());j.put("agent_brain_configured",new ConfigManager(a).isConfigured());
+            JSONArray events=new JSONArray();for(LifeDb.Event e:db.recentEvents(100)){JSONObject x=new JSONObject();x.put("id",e.id);x.put("app",e.app);x.put("title",e.title);x.put("body",e.body);x.put("thread_key",e.threadKey);x.put("at",e.at);events.put(x);}j.put("recent_events",events);
+            JSONArray loops=new JSONArray();for(LifeDb.Loop l:openLoops){JSONObject x=new JSONObject();x.put("id",l.id);x.put("kind",l.kind);x.put("title",l.title);x.put("evidence_id",l.evidenceId);x.put("due_at",l.dueAt);x.put("priority",l.priority);x.put("confidence",l.confidence);LifeDb.Event e=db.eventById(l.evidenceId);if(e!=null){x.put("source_app",e.app);x.put("source_label",LifeDb.isConversationLike(e)?LifeDb.personLabel(e):LifeDb.friendlyApp(e.app));}loops.put(x);}j.put("open_loops",loops);
+            List<PersistentActionQueue.Item> actions=new PersistentActionQueue(a).pending();List<SituationEngine.Situation> situations=SituationEngine.build(db,openLoops,actions,System.currentTimeMillis());JSONArray ss=new JSONArray();for(SituationEngine.Situation q:situations){JSONObject x=new JSONObject();x.put("id",q.id);x.put("title",q.title);x.put("status",q.status);x.put("summary",q.summary);x.put("why",q.why);x.put("priority",q.score);x.put("evidence",q.eventCount);x.put("attention",q.attentionCount);x.put("actions",q.actionCount);x.put("signals",new JSONArray(q.signals));ss.put(x);}j.put("situations",ss);
+            JSONArray suggestions=new JSONArray();for(ProactiveFeedEngine.Suggestion q:ProactiveFeedEngine.suggestions(db,openLoops)){JSONObject x=new JSONObject();x.put("title",q.title);x.put("why",q.why);x.put("kind",q.kind);x.put("event_id",q.eventId);x.put("loop_id",q.loopId);x.put("priority",q.score);suggestions.put(x);}j.put("suggestions",suggestions);db.close();
         }catch(Throwable t){try{j.put("snapshot_error",String.valueOf(t));}catch(Exception ignored){}}
         return j;
     }
@@ -114,8 +120,8 @@ public final class ExperienceAudit {
         if(v instanceof TextView)j.put("text",((TextView)v).getText().toString());
         if(v instanceof ViewGroup){JSONArray c=new JSONArray();ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)c.put(viewJson(g.getChildAt(i)));j.put("children",c);}return j;
     }
-    private static JSONArray visibleText(View v)throws Exception{JSONArray out=new JSONArray();collectText(v,out);return out;}
-    private static void collectText(View v,JSONArray out)throws Exception{if(v.getVisibility()!=View.VISIBLE)return;if(v instanceof TextView){String t=((TextView)v).getText().toString().trim();if(!t.isEmpty())out.put(t);}if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)collectText(g.getChildAt(i),out);}}
+    private static JSONArray visibleText(View v,boolean viewportOnly)throws Exception{JSONArray out=new JSONArray();collectText(v,out,viewportOnly);return out;}
+    private static void collectText(View v,JSONArray out,boolean viewportOnly)throws Exception{if(v.getVisibility()!=View.VISIBLE)return;if(v instanceof TextView&&(!viewportOnly||v.getGlobalVisibleRect(new Rect()))){String t=((TextView)v).getText().toString().trim();if(!t.isEmpty())out.put(t);}if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++)collectText(g.getChildAt(i),out,viewportOnly);}}
     private static void writeJson(File f,JSONObject j){try(FileOutputStream o=new FileOutputStream(f)){o.write(j.toString(2).getBytes(StandardCharsets.UTF_8));}catch(Exception ignored){}}
     private static String safe(String x){return x.replaceAll("[^A-Za-z0-9._-]+","_");}
 }
