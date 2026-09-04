@@ -51,6 +51,7 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper implements
         db.execSQL("CREATE INDEX memory_subject_idx ON memories(subject_entity_id,added_at DESC)");
         db.execSQL("CREATE INDEX memory_tier_idx ON memories(tier,category,last_accessed_at DESC)");
         db.execSQL("CREATE INDEX memory_category_idx ON memories(category,added_at DESC)");
+        db.execSQL("CREATE INDEX memory_assertion_idx ON memories(source_assertion_id)");
     }
 
     @Override public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {}
@@ -61,6 +62,11 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper implements
                                       long now) {
         String clean = text == null ? "" : text.trim();
         if (clean.isEmpty()) return -1L;
+        String assertion = safe(sourceAssertionId);
+        if (!assertion.isEmpty()) {
+            long existing = memoryIdForAssertion(assertion);
+            if (existing > 0) return existing;
+        }
         ContentValues v = new ContentValues();
         v.put("subject_entity_id", safe(subjectEntityId));
         v.put("text", clean);
@@ -70,7 +76,7 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper implements
         v.put("strength", 1.0f);
         v.put("tier", MemoryRecord.Tier.HOT.name());
         if (embedding != null) v.put("embedding", floatsToBytes(embedding));
-        v.put("source_assertion_id", safe(sourceAssertionId));
+        v.put("source_assertion_id", assertion);
         v.put("evidence_ids_json", evidenceJson(evidenceIds));
         return getWritableDatabase().insert("memories", null, v);
     }
@@ -157,6 +163,13 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper implements
     }
 
     @Override public synchronized void eraseAll() { getWritableDatabase().delete("memories", null, null); }
+
+    private long memoryIdForAssertion(String assertionId) {
+        Cursor c = getReadableDatabase().query("memories", new String[]{"id"},
+                "source_assertion_id=?", new String[]{assertionId}, null, null, "id DESC", "1");
+        try { return c.moveToFirst() ? c.getLong(0) : -1L; }
+        finally { c.close(); }
+    }
 
     private List<MemoryRecord> query(String selection, String[] args, int limit) {
         List<MemoryRecord> out = new ArrayList<MemoryRecord>();

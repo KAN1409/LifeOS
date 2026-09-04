@@ -42,10 +42,17 @@ public final class LifeNotificationListener extends NotificationListenerService 
         RawObservation raw=V2_ADAPTER.adapt(new NotificationCapture(key,app,title,conversation,body,at));
         UniversalObservationStore.get(this).append(raw);
 
-        // Existing M1 path remains intact until V2 proves equivalent/better.
+        // Existing M1/canonical path stays intact while local grounded memory consumes only
+        // evidence that passes the stricter EventSemantics person-conversation gate.
         NotificationUnderstandingProbe.observe(this,effectiveThread,body,at,key);
         long id=db.upsertEvent(key,app,title,body,effectiveThread,at);
-        if(id>0){List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(title,body,System.currentTimeMillis());for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);return true;}return false;
+        if(id>0){
+            List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(title,body,System.currentTimeMillis());
+            for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);
+            LocalGroundedMemory.materialize(this,db.eventById(id));
+            return true;
+        }
+        return false;
     }
     private static String participant(String title,String conversation,String body){if(conversation!=null&&!conversation.trim().isEmpty())return conversation.trim();String t=title==null?"":title.trim(),low=t.toLowerCase(Locale.ROOT);if(!low.equals("whatsapp")&&!low.equals("messenger")&&!low.equals("telegram")&&!low.contains("new message"))return "";int colon=body==null?-1:body.indexOf(':');if(colon>1&&colon<80)return body.substring(0,colon).trim();return "";}
     private static boolean isSensitive(String s){String x=s.toLowerCase(Locale.ROOT);return x.contains("otp")||x.contains("one-time password")||x.contains("verification code")||x.contains("رمز التحقق")||x.contains("كود التحقق");}
