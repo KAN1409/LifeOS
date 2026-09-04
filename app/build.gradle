@@ -21,5 +21,6 @@ android {
 
 dependencies {
     implementation project(':vendor:teya')
+    implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
     testImplementation 'junit:junit:4.13.2'
 }
