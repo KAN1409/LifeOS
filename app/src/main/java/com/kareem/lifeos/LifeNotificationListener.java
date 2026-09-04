@@ -115,16 +115,34 @@ public final class LifeNotificationListener extends NotificationListenerService 
         UniversalObservationStore.get(this).append(raw);
 
         // Raw capture is broader than understanding. Summaries and secrets remain evidence but
-        // are never promoted into conversation memory, open loops, or user-facing situations.
+        // are never promoted into conversation memory, open loops, or semantic work.
         if(sensitive||CapturePolicy.isNotificationSummary(body))return false;
 
+        // Canonical understanding is immediate and independent from deep semantic inference.
         NotificationUnderstandingProbe.observe(this,thread,body,at,key);
         String eventTitle=structuralLabel.isEmpty()?LifeDb.friendlyApp(app):structuralLabel;
         long id=db.upsertEvent(key,app,eventTitle,body,thread,at);
         if(id>0){
+            LifeDb.Event event=db.eventById(id);
+            FastAttentionGate.Result fast=FastAttentionGate.evaluate(event,raw,System.currentTimeMillis());
+            AttentionStore attention=AttentionStore.get(this);
+            // Every eligible notification is durably queued immediately. Opening/dismissing the
+            // Android notification cannot remove this work item.
+            attention.enqueue(raw.observationId,raw.streamId,id,raw.observedAt,fast.queuePriority);
+            if(fast.provisional){
+                attention.provisional(raw.observationId,raw.streamId,id,raw.observedAt,fast.type,fast.intent,
+                        fast.urgency,fast.action,fast.summary,fast.reason,fast.confidence,fast.attentionPriority);
+            }
+
+            // Keep the legacy extractor as a compatibility/fallback surface while the new durable
+            // attention ledger becomes authoritative.
             List<OpenLoopExtractor.Candidate> loops=OpenLoopExtractor.extract(eventTitle,body,System.currentTimeMillis());
             for(OpenLoopExtractor.Candidate x:loops)db.upsertLoop(id,x);
-            LocalGroundedMemory.materialize(this,db.eventById(id));
+            LocalGroundedMemory.materialize(this,event);
+
+            // AICore permits deep inference only while LifeOS is foreground. If it already is,
+            // consume the queue immediately; otherwise FeedActivity will drain it on next resume.
+            if(LifeOsApp.isAppForeground())NotificationBrain.analyzeForeground(this,null);
             return true;
         }
         return false;
