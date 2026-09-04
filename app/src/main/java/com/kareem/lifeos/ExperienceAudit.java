@@ -12,6 +12,7 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
 import com.kareem.lifeos.actions.PersistentActionQueue;
+import com.kareem.lifeos.context.RawObservation;
 import com.kareem.lifeos.context.UniversalObservationStore;
 import com.kareem.lifeos.engine.PersistentUnderstandingStore;
 import com.kareem.lifeos.memory.PersistentLifeMemoryStore;
@@ -22,8 +23,10 @@ import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -106,11 +109,20 @@ public final class ExperienceAudit {
         JSONObject j=new JSONObject();
         try{
             LifeDb db=new LifeDb(a);j.put("package",a.getPackageName());j.put("version_name",a.getPackageManager().getPackageInfo(a.getPackageName(),0).versionName);j.put("version_code",a.getPackageManager().getPackageInfo(a.getPackageName(),0).getLongVersionCode());
-            List<LifeDb.Loop> openLoops=db.openLoops(100);List<LifeDb.Conversation> conversations=db.recentConversations(100);j.put("raw_observations",UniversalObservationStore.get(a).count());j.put("grounded_memories",PersistentLifeMemoryStore.get(a).searchable().size());j.put("canonical_engine",PersistentUnderstandingStore.get(a).canonicalEngineVersion());j.put("attention_items",openLoops.size());j.put("conversation_count",conversations.size());j.put("decision_count",db.count("decisions"));j.put("agent_actions",new PersistentActionQueue(a).pending().size());j.put("agent_brain_configured",new ConfigManager(a).isConfigured());
+            UniversalObservationStore observationStore=UniversalObservationStore.get(a);
+            List<RawObservation> rawSample=observationStore.recent(500);int notificationFacts=0;Set<String> notificationStreams=new HashSet<>();
+            for(RawObservation o:rawSample){if(o!=null&&o.sourceKind==RawObservation.SourceKind.NOTIFICATION){notificationFacts++;if(o.streamId!=null&&!o.streamId.trim().isEmpty())notificationStreams.add(o.streamId);}}
+            List<LifeDb.Loop> openLoops=db.openLoops(100);List<LifeDb.Conversation> conversations=db.recentConversations(100);j.put("raw_observations",observationStore.count());j.put("grounded_memories",PersistentLifeMemoryStore.get(a).searchable().size());j.put("canonical_engine",PersistentUnderstandingStore.get(a).canonicalEngineVersion());j.put("attention_items",openLoops.size());j.put("conversation_count",conversations.size());j.put("decision_count",db.count("decisions"));j.put("agent_actions",new PersistentActionQueue(a).pending().size());j.put("agent_brain_configured",new ConfigManager(a).isConfigured());
+
+            NotificationMeaningStore brainStore=NotificationMeaningStore.get(a);List<NotificationMeaning> brainMeanings=brainStore.recent(500);JSONObject brainTypes=new JSONObject(),brainActions=new JSONObject();JSONArray brainRecent=new JSONArray();int summarizable=0,brainAttention=0;
+            for(NotificationMeaning m:brainMeanings){if(m.canSummarize())summarizable++;if(m.needsAttention())brainAttention++;brainTypes.put(m.type,brainTypes.optInt(m.type,0)+1);brainActions.put(m.action,brainActions.optInt(m.action,0)+1);if(brainRecent.length()<50){JSONObject x=new JSONObject();x.put("stream_id",m.streamId);x.put("source_observation_id",m.sourceObservationId);x.put("type",m.type);x.put("intent",m.intent);x.put("state",m.state);x.put("urgency",m.urgency);x.put("action",m.action);x.put("summary",m.summary);x.put("reason",m.reason);x.put("confidence",m.confidence);x.put("model",m.model);x.put("understood_at",m.understoodAt);brainRecent.put(x);}}
+            JSONObject brainMetrics=new JSONObject();brainMetrics.put("stored_meanings",brainStore.count());brainMetrics.put("summarizable_meanings",summarizable);brainMetrics.put("attention_meanings",brainAttention);brainMetrics.put("recent_notification_facts_sample",notificationFacts);brainMetrics.put("recent_notification_streams_sample",notificationStreams.size());brainMetrics.put("type_counts",brainTypes);brainMetrics.put("action_counts",brainActions);brainMetrics.put("recent_meanings",brainRecent);j.put("notification_brain",brainMetrics);
+
             JSONObject typeCounts=new JSONObject();JSONArray events=new JSONArray();for(LifeDb.Event e:db.recentEvents(100)){JSONObject x=new JSONObject();String semantic=EventSemantics.typeName(e);EventSemantics.Assessment assessment=EventSemantics.classify(e);x.put("id",e.id);x.put("app",e.app);x.put("title",e.title);x.put("body",e.body);x.put("thread_key",e.threadKey);x.put("semantic_type",semantic);x.put("worth_surfacing",assessment.worthSurfacing);x.put("at",e.at);events.put(x);typeCounts.put(semantic,typeCounts.optInt(semantic,0)+1);}j.put("recent_events",events);j.put("semantic_type_counts",typeCounts);
             JSONArray loops=new JSONArray();for(LifeDb.Loop l:openLoops){JSONObject x=new JSONObject();x.put("id",l.id);x.put("kind",l.kind);x.put("title",l.title);x.put("evidence_id",l.evidenceId);x.put("due_at",l.dueAt);x.put("priority",l.priority);x.put("confidence",l.confidence);LifeDb.Event e=db.eventById(l.evidenceId);if(e!=null){x.put("source_app",e.app);x.put("source_type",EventSemantics.typeName(e));x.put("source_label",LifeDb.isConversationLike(e)?LifeDb.personLabel(e):LifeDb.friendlyApp(e.app));}loops.put(x);}j.put("open_loops",loops);
             List<PersistentActionQueue.Item> actions=new PersistentActionQueue(a).pending();List<SituationEngine.Situation> situations=SituationEngine.build(db,openLoops,actions,System.currentTimeMillis());JSONArray ss=new JSONArray();for(SituationEngine.Situation q:situations){JSONObject x=new JSONObject();x.put("id",q.id);x.put("title",q.title);x.put("status",q.status);x.put("summary",q.summary);x.put("why",q.why);x.put("priority",q.score);x.put("evidence",q.eventCount);x.put("attention",q.attentionCount);x.put("actions",q.actionCount);x.put("signals",new JSONArray(q.signals));ss.put(x);}j.put("situations",ss);
-            JSONArray suggestions=new JSONArray();for(ProactiveFeedEngine.Suggestion q:ProactiveFeedEngine.suggestions(db,openLoops)){JSONObject x=new JSONObject();x.put("title",q.title);x.put("why",q.why);x.put("kind",q.kind);x.put("event_id",q.eventId);x.put("loop_id",q.loopId);x.put("priority",q.score);suggestions.put(x);}j.put("suggestions",suggestions);db.close();
+            JSONArray suggestions=new JSONArray();for(ProactiveFeedEngine.Suggestion q:ProactiveFeedEngine.suggestions(db,openLoops)){JSONObject x=new JSONObject();x.put("title",q.title);x.put("why",q.why);x.put("kind",q.kind);x.put("event_id",q.eventId);x.put("loop_id",q.loopId);x.put("priority",q.score);suggestions.put(x);}j.put("suggestions",suggestions);
+            JSONObject compression=new JSONObject();compression.put("raw_observations",observationStore.count());compression.put("recent_notification_facts_sample",notificationFacts);compression.put("recent_notification_streams_sample",notificationStreams.size());compression.put("understood_streams",brainStore.count());compression.put("summarizable_streams",summarizable);compression.put("attention_meanings",brainAttention);compression.put("legacy_attention_items",openLoops.size());compression.put("situations",situations.size());compression.put("suggestions",suggestions.length());j.put("semantic_compression",compression);db.close();
         }catch(Throwable t){try{j.put("snapshot_error",String.valueOf(t));}catch(Exception ignored){}}
         return j;
     }
