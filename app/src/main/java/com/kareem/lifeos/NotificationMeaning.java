@@ -34,14 +34,22 @@ final class NotificationMeaning {
         return ("SECURITY_ALERT".equals(type)||"FINANCIAL_ALERT".equals(type))&&("HIGH".equals(urgency)||"MEDIUM".equals(urgency))&&!"NONE".equals(action);
     }
 
+    /**
+     * Model-grounded non-person states use a brain_* namespace so legacy keyword validation cannot
+     * silently erase a high-confidence state that was recognized from a novel app/source.
+     */
     String loopKind(){
-        if("SECURITY_ALERT".equals(type))return "security";
-        if("FINANCIAL_ALERT".equals(type))return "financial_alert";
-        if("CALENDAR_EVENT".equals(type)||"SCHEDULE".equals(intent))return "appointment";
-        if("MISSED_CALL".equals(type))return "call";
-        if("REMINDER".equals(type))return "reminder";
+        if("SECURITY_ALERT".equals(type))return "brain_security";
+        if("FINANCIAL_ALERT".equals(type))return "brain_financial";
+        if("EMAIL".equals(type))return "brain_email";
+        if("CALENDAR_EVENT".equals(type))return "brain_calendar";
+        if("MISSED_CALL".equals(type))return "brain_call";
+        if("REMINDER".equals(type))return "brain_reminder";
+        if("TRANSACTION".equals(type))return "brain_transaction";
+        if("DELIVERY".equals(type))return "brain_delivery";
         if("QUESTION".equals(intent))return "question";
         if("COMMITMENT".equals(intent))return "commitment";
+        if("SCHEDULE".equals(intent))return "appointment";
         return "request";
     }
 
