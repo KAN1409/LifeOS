@@ -4,6 +4,8 @@ import org.json.JSONObject;
 
 /** Compact, grounded meaning of one notification stream/conversation. */
 final class NotificationMeaning {
+    static final double SUMMARY_CONFIDENCE=.62;
+    static final double ATTENTION_CONFIDENCE=.78;
     static final String[] TYPES={"PERSON_CONVERSATION","SECURITY_ALERT","FINANCIAL_ALERT","TRANSACTION","DELIVERY","CONTENT_READY","PROMOTION","SYSTEM_EVENT","OTHER"};
     static final String[] INTENTS={"REQUEST","QUESTION","COMMITMENT","SCHEDULE","INFORMATION","ALERT","NONE"};
     static final String[] STATES={"WAITING_ON_USER","WAITING_ON_OTHER","INFORMATIONAL","RESOLVED","UNKNOWN"};
@@ -24,8 +26,10 @@ final class NotificationMeaning {
         this.confidence=Math.max(0,Math.min(1,confidence));this.model=safe(model);this.understoodAt=understoodAt;
     }
 
+    boolean canSummarize(){return confidence>=SUMMARY_CONFIDENCE&&!summary.isEmpty();}
+
     boolean needsAttention(){
-        if(confidence<0.62)return false;
+        if(confidence<ATTENTION_CONFIDENCE)return false;
         if("WAITING_ON_USER".equals(state)&&!"NONE".equals(action))return true;
         return ("SECURITY_ALERT".equals(type)||"FINANCIAL_ALERT".equals(type))&&("HIGH".equals(urgency)||"MEDIUM".equals(urgency))&&!"NONE".equals(action);
     }
