@@ -14,6 +14,20 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+      - name: Export Android Build-Tools 35 verification kit
+        run: |
+          set -euo pipefail
+          BT="$ANDROID_HOME/build-tools/35.0.0"
+          if test ! -x "$BT/zipalign"; then sdkmanager 'build-tools;35.0.0'; fi
+          OUT="$RUNNER_TEMP/lifeos-build-tools35"
+          mkdir -p "$OUT/lib" "$OUT/lib64"
+          cp "$BT/apksigner" "$BT/zipalign" "$BT/aapt" "$BT/aapt2" "$OUT/"
+          cp "$BT/lib/apksigner.jar" "$OUT/lib/"
+          cp "$BT/lib64/libc++.so" "$OUT/lib64/"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LifeOS-Android-build-tools35-verification-kit
+          path: ${{ runner.temp }}/lifeos-build-tools35
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
