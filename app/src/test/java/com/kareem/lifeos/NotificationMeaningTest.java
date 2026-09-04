@@ -12,7 +12,17 @@ public final class NotificationMeaningTest {
                 .put("action","DO_TASK").put("summary","Mona asked you to send the document.")
                 .put("reason","The latest message asks for the document.").put("confidence",.91);
         NotificationMeaning m=NotificationMeaning.fromModel(o,"com.whatsapp|mona","notification|1","nano",100L);
-        assertNotNull(m);assertTrue(m.needsAttention());assertEquals("request",m.loopKind());assertEquals(74,m.priority());
+        assertNotNull(m);assertTrue(m.canSummarize());assertTrue(m.needsAttention());assertEquals("request",m.loopKind());assertEquals(74,m.priority());
+    }
+
+    @Test public void mediumConfidenceCanSummarizeButCannotInterruptUser() throws Exception {
+        JSONObject o=new JSONObject()
+                .put("type","PERSON_CONVERSATION").put("intent","REQUEST")
+                .put("state","WAITING_ON_USER").put("urgency","MEDIUM")
+                .put("action","REPLY").put("summary","Ahmed may be asking for a reply.")
+                .put("confidence",.70);
+        NotificationMeaning m=NotificationMeaning.fromModel(o,"com.whatsapp|ahmed","notification|mid","nano",100L);
+        assertTrue(m.canSummarize());assertFalse(m.needsAttention());
     }
 
     @Test public void informationalMessageDoesNotBecomeAttention() throws Exception {
@@ -32,7 +42,7 @@ public final class NotificationMeaningTest {
                 .put("action","VERIFY").put("summary","Check this sign-in.")
                 .put("confidence",.41);
         NotificationMeaning m=NotificationMeaning.fromModel(o,"com.google|security","notification|3","nano",100L);
-        assertFalse(m.needsAttention());
+        assertFalse(m.canSummarize());assertFalse(m.needsAttention());
     }
 
     @Test public void unknownModelLabelsAreConservativelyClamped() throws Exception {
