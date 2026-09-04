@@ -8,8 +8,8 @@ android {
         applicationId 'com.kareem.lifeos'
         minSdk 26
         targetSdk 35
-        versionCode 30
-        versionName '0.10.4-V2-audit-trust-repair'
+        versionCode 31
+        versionName '0.10.5-V2-semantic-compression-core'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 
