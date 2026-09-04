@@ -28,8 +28,6 @@ final class NotificationMeaningStore extends SQLiteOpenHelper {
     }
     @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){
         if(oldVersion<2){
-            // SQLite renames indexes together with the old table. Drop our known v1 index names
-            // first so the new evidence-keyed table can recreate them deterministically.
             db.execSQL("DROP INDEX IF EXISTS meanings_time");
             db.execSQL("DROP INDEX IF EXISTS meanings_stream_time");
             db.execSQL("ALTER TABLE meanings RENAME TO meanings_v1");
@@ -55,23 +53,27 @@ final class NotificationMeaningStore extends SQLiteOpenHelper {
         }
     }
 
+    /** Exact/near-exact evidence projection, preventing a newer message in one thread from repainting older events. */
+    synchronized NotificationMeaning forStreamAt(String streamId,long sourceAt){
+        long lo=Math.max(0,sourceAt-7000),hi=sourceAt+7000;
+        try(Cursor c=getReadableDatabase().rawQuery(select()+" WHERE stream_id=? AND source_observed_at BETWEEN ? AND ? ORDER BY ABS(source_observed_at-?) ASC,understood_at DESC LIMIT 1",new String[]{safe(streamId),String.valueOf(lo),String.valueOf(hi),String.valueOf(sourceAt)})){
+            return c.moveToFirst()?read(c):null;
+        }
+    }
+
     synchronized NotificationMeaning forObservation(String sourceObservationId){
         try(Cursor c=getReadableDatabase().rawQuery(select()+" WHERE source_observation_id=? LIMIT 1",new String[]{safe(sourceObservationId)})){
             return c.moveToFirst()?read(c):null;
         }
     }
 
-    synchronized boolean isCurrent(String streamId,String sourceObservationId){
-        NotificationMeaning m=forStream(streamId);return m!=null&&m.sourceObservationId.equals(safe(sourceObservationId));
-    }
+    synchronized boolean isCurrent(String streamId,String sourceObservationId){NotificationMeaning m=forStream(streamId);return m!=null&&m.sourceObservationId.equals(safe(sourceObservationId));}
 
     /** Latest projection per stream, used by conversation/Today UI. */
     synchronized List<NotificationMeaning> recent(int limit){
         ArrayList<NotificationMeaning> out=new ArrayList<>();
         String sql=select()+" m WHERE NOT EXISTS (SELECT 1 FROM meanings n WHERE n.stream_id=m.stream_id AND (n.source_observed_at>m.source_observed_at OR (n.source_observed_at=m.source_observed_at AND n.understood_at>m.understood_at))) ORDER BY m.understood_at DESC LIMIT ?";
-        try(Cursor c=getReadableDatabase().rawQuery(sql,new String[]{String.valueOf(Math.max(1,limit))})){
-            while(c.moveToNext())out.add(read(c));
-        }return out;
+        try(Cursor c=getReadableDatabase().rawQuery(sql,new String[]{String.valueOf(Math.max(1,limit)))){while(c.moveToNext())out.add(read(c));}return out;
     }
 
     synchronized int count(){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM meanings",null)){return c.moveToFirst()?c.getInt(0):0;}}
