@@ -13,15 +13,11 @@ public final class LifeOsApp extends Application {
         super.onCreate();
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks(){
             @Override public void onActivityCreated(Activity a,Bundle b){}
-            @Override public void onActivityStarted(Activity a){
-                // Start draining durable semantic work as soon as ANY LifeOS surface enters the
-                // foreground lifecycle. Now is a view over prepared state, not the brain trigger.
-                try{NotificationBrain.analyzeForeground(a,null);}catch(Throwable ignored){}
-            }
+            @Override public void onActivityStarted(Activity a){}
             @Override public void onActivityResumed(Activity a){
                 synchronized(LifeOsApp.class){resumedActivities++;}
-                // A second cheap trigger closes lifecycle races and also catches notifications
-                // queued between start and resume. NotificationBrain serializes duplicate calls.
+                // Deep AICore inference is legal only while LifeOS is genuinely foreground.
+                // Trigger from every resumed LifeOS surface so Now never owns the brain lifecycle.
                 try{NotificationBrain.analyzeForeground(a,null);}catch(Throwable ignored){}
             }
             @Override public void onActivityPaused(Activity a){synchronized(LifeOsApp.class){resumedActivities=Math.max(0,resumedActivities-1);}}
