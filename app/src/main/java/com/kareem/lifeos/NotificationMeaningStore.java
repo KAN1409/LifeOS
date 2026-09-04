@@ -28,6 +28,10 @@ final class NotificationMeaningStore extends SQLiteOpenHelper {
     }
     @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){
         if(oldVersion<2){
+            // SQLite renames indexes together with the old table. Drop our known v1 index names
+            // first so the new evidence-keyed table can recreate them deterministically.
+            db.execSQL("DROP INDEX IF EXISTS meanings_time");
+            db.execSQL("DROP INDEX IF EXISTS meanings_stream_time");
             db.execSQL("ALTER TABLE meanings RENAME TO meanings_v1");
             createSchema(db);
             db.execSQL("INSERT OR IGNORE INTO meanings(source_observation_id,stream_id,source_observed_at,type,intent,state,urgency,action,summary,reason,confidence,model,understood_at) SELECT source_observation_id,stream_id,0,type,intent,state,urgency,action,summary,reason,confidence,model,understood_at FROM meanings_v1");
