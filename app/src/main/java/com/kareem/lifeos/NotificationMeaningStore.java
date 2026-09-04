@@ -73,7 +73,7 @@ final class NotificationMeaningStore extends SQLiteOpenHelper {
     synchronized List<NotificationMeaning> recent(int limit){
         ArrayList<NotificationMeaning> out=new ArrayList<>();
         String sql=select()+" m WHERE NOT EXISTS (SELECT 1 FROM meanings n WHERE n.stream_id=m.stream_id AND (n.source_observed_at>m.source_observed_at OR (n.source_observed_at=m.source_observed_at AND n.understood_at>m.understood_at))) ORDER BY m.understood_at DESC LIMIT ?";
-        try(Cursor c=getReadableDatabase().rawQuery(sql,new String[]{String.valueOf(Math.max(1,limit)))){while(c.moveToNext())out.add(read(c));}return out;
+        try(Cursor c=getReadableDatabase().rawQuery(sql,new String[]{String.valueOf(Math.max(1,limit))})){while(c.moveToNext())out.add(read(c));}return out;
     }
 
     synchronized int count(){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM meanings",null)){return c.moveToFirst()?c.getInt(0):0;}}
