@@ -49,6 +49,16 @@ public final class ObservationAdaptersTest {
         assertEquals("com.whatsapp|ahmed", o.streamId);
     }
 
+    @Test public void genericMessagingTitleDoesNotMixDifferentPeople() {
+        NotificationCapture capture = new NotificationCapture(
+                "key-4", "com.whatsapp", "WhatsApp", "", "",
+                "Mona: Please bring the medicine", "msg", "messages", false, false, 6790L);
+        RawObservation o = new NotificationObservationAdapter().adapt(capture);
+        assertEquals("com.whatsapp|mona", o.streamId);
+        assertEquals("Mona", o.attributes.get("resolved_stream_label"));
+        assertEquals("true", o.attributes.get("structured_message"));
+    }
+
     @Test public void accessibilityAdapterPreservesRawTreePayload() {
         RawNode node = new RawNode(1,-1,0,"android.widget.TextView","id/title","Hello","",0,0,100,40,false,false,false);
         RawScreenSnapshot snapshot = new RawScreenSnapshot(
