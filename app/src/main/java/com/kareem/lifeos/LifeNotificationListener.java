@@ -1,6 +1,7 @@
 package com.kareem.lifeos;
 
 import android.app.Notification;
+import android.content.ComponentName;
 import android.os.Bundle;
 import android.os.Parcelable;
 import android.service.notification.NotificationListenerService;
@@ -28,14 +29,34 @@ import java.util.Set;
 public final class LifeNotificationListener extends NotificationListenerService {
     private static final NotificationObservationAdapter V2_ADAPTER=new NotificationObservationAdapter();
 
-    @Override public void onNotificationPosted(StatusBarNotification sbn) {
+    @Override public void onNotificationPosted(StatusBarNotification sbn) { processNotification(sbn); }
+
+    /** Recover active evidence that may have been posted while Android had the listener detached. */
+    @Override public void onListenerConnected(){
+        super.onListenerConnected();
+        try{
+            StatusBarNotification[] active=getActiveNotifications();
+            if(active!=null)for(StatusBarNotification sbn:active)processNotification(sbn);
+        }catch(Throwable ignored){}
+    }
+
+    /** Ask Android to restore the listener binding after a transient process/service disconnect. */
+    @Override public void onListenerDisconnected(){
+        super.onListenerDisconnected();
+        try{requestRebind(new ComponentName(this,LifeNotificationListener.class));}catch(Throwable ignored){}
+    }
+
+    private void processNotification(StatusBarNotification sbn) {
         if(sbn==null||sbn.getNotification()==null)return;
+        String app=sbn.getPackageName()==null?"unknown":sbn.getPackageName();
+        // Never feed LifeOS/Teya foreground-service notifications back into LifeOS itself.
+        if(getPackageName().equals(app))return;
+
         Notification n=sbn.getNotification();
         Bundle e=n.extras==null?Bundle.EMPTY:n.extras;
         String title=text(e.getCharSequence(Notification.EXTRA_TITLE));
         String body=text(e.getCharSequence(Notification.EXTRA_BIG_TEXT));
         if(body.isEmpty())body=text(e.getCharSequence(Notification.EXTRA_TEXT));
-        String app=sbn.getPackageName()==null?"unknown":sbn.getPackageName();
         String conversation=text(e.getCharSequence(Notification.EXTRA_CONVERSATION_TITLE));
         boolean group=e.getBoolean(Notification.EXTRA_IS_GROUP_CONVERSATION,false);
         String category=n.category==null?"":n.category;
@@ -73,6 +94,8 @@ public final class LifeNotificationListener extends NotificationListenerService 
                     store(db,base+"|body|"+sha(body),app,title,conversation,"",body,category,channel,group,ongoing,sbn.getPostTime());
                 }
             }
+        }catch(Throwable ignored){
+            // A malformed third-party notification must never break capture for subsequent apps.
         }
     }
 
