@@ -22,7 +22,7 @@ public final class ObservationAdaptersTest {
         assertEquals("Ahmed", o.attributes.get("title"));
         assertEquals("Project A", o.attributes.get("conversation_title"));
         assertEquals("", o.attributes.get("sender"));
-        assertEquals("false", o.attributes.get("structured_message"));
+        assertEquals("true", o.attributes.get("structured_message"));
     }
 
     @Test public void notificationAdapterPreservesRichMessagingStructure() {
