@@ -22,3 +22,18 @@ jobs:
         with:
           name: LifeOS-V2-transplant-preview-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Pack Android apksigner toolchain
+        run: |
+          set -euo pipefail
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
+          test -n "$BT"
+          test -x "$BT/apksigner"
+          test -f "$BT/lib/apksigner.jar"
+          mkdir -p "$RUNNER_TEMP/lifeos-apksigner/lib"
+          cp "$BT/apksigner" "$RUNNER_TEMP/lifeos-apksigner/apksigner"
+          cp "$BT/lib/apksigner.jar" "$RUNNER_TEMP/lifeos-apksigner/lib/apksigner.jar"
+          if test -x "$BT/zipalign"; then cp "$BT/zipalign" "$RUNNER_TEMP/lifeos-apksigner/zipalign"; fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LifeOS-Android-apksigner-toolchain
+          path: ${{ runner.temp }}/lifeos-apksigner
