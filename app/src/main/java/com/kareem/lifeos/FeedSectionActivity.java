@@ -14,8 +14,11 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import com.kareem.lifeos.actions.PersistentActionQueue;
 import java.text.DateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public final class FeedSectionActivity extends Activity {
     private static final int BG=Color.rgb(13,17,23),SURFACE=Color.rgb(22,27,34),BORDER=Color.rgb(48,54,61),TEXT=Color.rgb(230,237,243),MUTED=Color.rgb(139,148,158),GREEN=Color.rgb(63,185,80);
@@ -28,15 +31,24 @@ public final class FeedSectionActivity extends Activity {
 
     private void load(){
         content.removeAllViews();
-        if("attention".equals(mode)){List<LifeDb.Loop> xs=db.openLoops(100);for(LifeDb.Loop x:xs){LinearLayout c=row();c.addView(badge(kind(x.kind)));LifeDb.Event e=db.eventById(x.evidenceId);String who=e==null?"":(LifeDb.isConversationLike(e)?LifeDb.personLabel(e):LifeDb.friendlyApp(e.app));TextView t=text((who.isEmpty()?"":who+" · ")+x.title+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,dp(7),0,0);c.addView(t);if(e!=null)c.addView(meta(time(e.at)+(x.dueAt>0?" · dated":"")));c.setOnClickListener(v->startActivity(new Intent(this,EvidenceDetailActivity.class).putExtra("event_id",x.evidenceId).putExtra("loop_id",x.id).putExtra("mode","attention")));content.addView(c);}if(xs.isEmpty())empty();return;}
+        List<AttentionStore.Item> durable=AttentionStore.get(this).openItems(100);Set<Long> covered=new HashSet<>();for(AttentionStore.Item item:durable)covered.add(item.eventId);
+        List<LifeDb.Loop> fallback=new ArrayList<>();for(LifeDb.Loop loop:db.openLoops(100))if(!covered.contains(loop.evidenceId))fallback.add(loop);
+
+        if("attention".equals(mode)){
+            for(AttentionStore.Item item:durable)durableAttentionCard(item);
+            for(LifeDb.Loop x:fallback)legacyAttentionCard(x);
+            if(durable.isEmpty()&&fallback.isEmpty())empty();return;
+        }
 
         List<ProactiveFeedEngine.RankedConversation> ranked=ProactiveFeedEngine.rank(db,db.recentConversations(100),System.currentTimeMillis());
         if("actions".equals(mode)){
-            List<ProactiveFeedEngine.Suggestion> derived=ProactiveFeedEngine.suggestions(db,db.openLoops(100));
+            for(AttentionStore.Item item:durable)if(!item.provisional&&AttentionStore.OPEN.equals(item.status))durableActionCard(item);
+            List<ProactiveFeedEngine.Suggestion> derived=ProactiveFeedEngine.suggestions(db,fallback);
             List<PersistentActionQueue.Item> agent=new PersistentActionQueue(this).pending();
             for(ProactiveFeedEngine.Suggestion s:derived){LinearLayout c=row();c.addView(badge(s.kind));TextView t=text(s.title+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,dp(7),0,0);c.addView(t);c.addView(meta(s.why));c.setOnClickListener(v->startActivity(new Intent(this,EvidenceDetailActivity.class).putExtra("event_id",s.eventId).putExtra("loop_id",s.loopId).putExtra("mode","action")));content.addView(c);}
             for(PersistentActionQueue.Item x:agent){LinearLayout c=row();c.addView(badge("AGENT · "+x.proposal.actionType.toUpperCase()));TextView t=text((x.proposal.payloadSummary.isEmpty()?x.proposal.actionType:x.proposal.payloadSummary)+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,dp(7),0,0);c.addView(t);c.addView(meta(x.proposal.target));c.setOnClickListener(v->startActivity(new Intent(this,SuggestedActionDetailActivity.class).putExtra("proposal_id",x.proposal.proposalId)));content.addView(c);}
-            if(derived.isEmpty()&&agent.isEmpty())empty();return;
+            boolean hasDurable=false;for(AttentionStore.Item item:durable)if(!item.provisional&&AttentionStore.OPEN.equals(item.status)){hasDurable=true;break;}
+            if(!hasDurable&&derived.isEmpty()&&agent.isEmpty())empty();return;
         }
 
         if(!ranked.isEmpty()){for(ProactiveFeedEngine.RankedConversation r:ranked){LifeDb.Conversation x=r.conversation;LinearLayout c=row();TextView t=text(x.label+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);c.addView(t);String sig=ProactiveSummaryEngine.signalLine(r.summary);if(!sig.isEmpty())c.addView(badge(sig.toUpperCase()));TextView b=text(trim(r.summary.summary,260),13,TEXT);b.setPadding(0,dp(6),0,0);c.addView(b);if(!r.summary.why.isEmpty())c.addView(meta(r.summary.why));c.addView(meta(x.count+" captured items · "+app(x.app)+" · "+time(x.latestAt)));c.setOnClickListener(v->startActivity(new Intent(this,ConversationDetailActivity.class).putExtra("event_id",x.latestEventId)));content.addView(c);}return;}
@@ -44,6 +56,11 @@ public final class FeedSectionActivity extends Activity {
         List<LifeDb.Event> es=db.recentEvents(100);for(LifeDb.Event e:es){LinearLayout c=row();TextView t=text((e.title==null||e.title.isEmpty()?app(e.app):e.title)+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);c.addView(t);TextView b=text(trim(e.body,260),13,TEXT);b.setPadding(0,dp(6),0,0);c.addView(b);c.addView(meta(app(e.app)+" · "+time(e.at)));c.setOnClickListener(v->{if(LifeDb.isConversationLike(e))startActivity(new Intent(this,ConversationDetailActivity.class).putExtra("event_id",e.id));else startActivity(new Intent(this,EvidenceDetailActivity.class).putExtra("event_id",e.id).putExtra("mode","activity"));});content.addView(c);}if(es.isEmpty())empty();
     }
 
+    private void durableAttentionCard(AttentionStore.Item item){LifeDb.Event e=db.eventById(item.eventId);LinearLayout c=row();c.addView(badge(item.provisional?"ANALYZING":(!"NONE".equals(item.intent)?item.intent:item.type)));String who=e==null?"":(LifeDb.isConversationLike(e)?LifeDb.personLabel(e):LifeDb.friendlyApp(e.app));TextView t=text((who.isEmpty()?"":who+" · ")+item.summary+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,dp(7),0,0);c.addView(t);c.addView(meta(item.provisional?"Reserved instantly · deep analysis pending":time(item.sourceAt)));c.setOnClickListener(v->startActivity(new Intent(this,EvidenceDetailActivity.class).putExtra("event_id",item.eventId).putExtra("mode","attention")));content.addView(c);}
+    private void legacyAttentionCard(LifeDb.Loop x){LinearLayout c=row();c.addView(badge(kind(x.kind)));LifeDb.Event e=db.eventById(x.evidenceId);String who=e==null?"":(LifeDb.isConversationLike(e)?LifeDb.personLabel(e):LifeDb.friendlyApp(e.app));TextView t=text((who.isEmpty()?"":who+" · ")+x.title+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,dp(7),0,0);c.addView(t);if(e!=null)c.addView(meta(time(e.at)+(x.dueAt>0?" · dated":"")));c.setOnClickListener(v->startActivity(new Intent(this,EvidenceDetailActivity.class).putExtra("event_id",x.evidenceId).putExtra("loop_id",x.id).putExtra("mode","attention")));content.addView(c);}
+    private void durableActionCard(AttentionStore.Item item){LinearLayout c=row();c.addView(badge(actionLabel(item.action).toUpperCase()));TextView t=text(actionLabel(item.action)+": "+item.summary+"  ›",15,TEXT);t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,dp(7),0,0);c.addView(t);if(!item.reason.isEmpty())c.addView(meta(item.reason));c.setOnClickListener(v->startActivity(new Intent(this,EvidenceDetailActivity.class).putExtra("event_id",item.eventId).putExtra("mode","action")));content.addView(c);}
+
+    private static String actionLabel(String action){if("REPLY".equals(action))return "Reply";if("DO_TASK".equals(action))return "Do task";if("VERIFY".equals(action))return "Verify";if("PAY".equals(action))return "Pay";if("REVIEW".equals(action))return "Review";if("CALL_BACK".equals(action))return "Call back";return "Review";}
     private static String trim(String s,int n){if(s==null)return "";s=s.trim();return s.length()>n?s.substring(0,n)+"…":s;}
     private void empty(){TextView v=text("Nothing here right now.",14,MUTED);v.setPadding(dp(4),dp(8),0,0);content.addView(v);}
     private LinearLayout row(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(14),dp(13),dp(14),dp(13));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,0,0,dp(8));c.setLayoutParams(p);c.setBackground(round(SURFACE,BORDER,9));return c;}
