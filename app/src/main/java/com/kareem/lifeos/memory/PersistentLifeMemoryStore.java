@@ -164,6 +164,11 @@ public final class PersistentLifeMemoryStore extends SQLiteOpenHelper implements
 
     @Override public synchronized void eraseAll() { getWritableDatabase().delete("memories", null, null); }
 
+    public synchronized boolean hasAssertion(String sourceAssertionId) {
+        String assertion = safe(sourceAssertionId);
+        return !assertion.isEmpty() && memoryIdForAssertion(assertion) > 0;
+    }
+
     private long memoryIdForAssertion(String assertionId) {
         Cursor c = getReadableDatabase().query("memories", new String[]{"id"},
                 "source_assertion_id=?", new String[]{assertionId}, null, null, "id DESC", "1");

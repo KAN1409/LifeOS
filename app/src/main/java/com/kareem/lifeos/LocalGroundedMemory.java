@@ -42,11 +42,14 @@ final class LocalGroundedMemory {
      */
     static int backfill(Context context, LifeDb db, int scanLimit, int promoteLimit) {
         if (context == null || db == null || scanLimit <= 0 || promoteLimit <= 0) return 0;
+        PersistentLifeMemoryStore store = PersistentLifeMemoryStore.get(context);
         int promoted = 0;
         List<LifeDb.Event> recent = db.recentEvents(Math.max(1, scanLimit));
         for (LifeDb.Event event : recent) {
             if (promoted >= promoteLimit) break;
             if (!eligible(event)) continue;
+            String assertion = assertionId(event);
+            if (store.hasAssertion(assertion)) continue;
             long id = materialize(context, event);
             if (id > 0) promoted++;
         }
