@@ -81,8 +81,9 @@ final class BackgroundBrain {
                 "Allowed type: PERSON_CONVERSATION, EMAIL, CALENDAR_EVENT, MISSED_CALL, REMINDER, SECURITY_ALERT, FINANCIAL_ALERT, TRANSACTION, DELIVERY, CONTENT_READY, PROMOTION, SYSTEM_EVENT, OTHER. " +
                 "Allowed intent: REQUEST, QUESTION, COMMITMENT, SCHEDULE, INFORMATION, ALERT, NONE. Allowed state: WAITING_ON_USER, WAITING_ON_OTHER, INFORMATIONAL, RESOLVED, UNKNOWN. " +
                 "Allowed urgency: HIGH, MEDIUM, LOW, NONE. Allowed action: REPLY, DO_TASK, VERIFY, PAY, REVIEW, CALL_BACK, NONE. " +
-                "WAITING_ON_USER requires evidence in target that the user is expected to act or answer. Promotions/content-ready/routine system info normally action NONE. " +
-                "summary must be one short sentence in the dominant language of target. reason must be one short evidence-based explanation. confidence is 0..1.\nINPUT:\n"+input.toString();
+                "WAITING_ON_USER requires evidence in target that Kareem is expected to act or answer. Promotions/content-ready/routine system info normally action NONE. " +
+                "summary must be one concise natural English sentence suitable for direct display in LifeOS. Address Kareem as 'you' when needed and never say 'the user'. " +
+                "reason must be one short English evidence-based explanation. confidence is 0..1.\nINPUT:\n"+input.toString();
     }
 
     private static JSONObject observationJson(RawObservation o)throws Exception{
