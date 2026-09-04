@@ -6,11 +6,11 @@ import org.json.JSONObject;
 final class NotificationMeaning {
     static final double SUMMARY_CONFIDENCE=.62;
     static final double ATTENTION_CONFIDENCE=.78;
-    static final String[] TYPES={"PERSON_CONVERSATION","SECURITY_ALERT","FINANCIAL_ALERT","TRANSACTION","DELIVERY","CONTENT_READY","PROMOTION","SYSTEM_EVENT","OTHER"};
+    static final String[] TYPES={"PERSON_CONVERSATION","EMAIL","CALENDAR_EVENT","MISSED_CALL","REMINDER","SECURITY_ALERT","FINANCIAL_ALERT","TRANSACTION","DELIVERY","CONTENT_READY","PROMOTION","SYSTEM_EVENT","OTHER"};
     static final String[] INTENTS={"REQUEST","QUESTION","COMMITMENT","SCHEDULE","INFORMATION","ALERT","NONE"};
     static final String[] STATES={"WAITING_ON_USER","WAITING_ON_OTHER","INFORMATIONAL","RESOLVED","UNKNOWN"};
     static final String[] URGENCIES={"HIGH","MEDIUM","LOW","NONE"};
-    static final String[] ACTIONS={"REPLY","DO_TASK","VERIFY","PAY","REVIEW","NONE"};
+    static final String[] ACTIONS={"REPLY","DO_TASK","VERIFY","PAY","REVIEW","CALL_BACK","NONE"};
 
     final String streamId,sourceObservationId,type,intent,state,urgency,action,summary,reason,model;
     final double confidence;
@@ -37,9 +37,11 @@ final class NotificationMeaning {
     String loopKind(){
         if("SECURITY_ALERT".equals(type))return "security";
         if("FINANCIAL_ALERT".equals(type))return "financial_alert";
+        if("CALENDAR_EVENT".equals(type)||"SCHEDULE".equals(intent))return "appointment";
+        if("MISSED_CALL".equals(type))return "call";
+        if("REMINDER".equals(type))return "reminder";
         if("QUESTION".equals(intent))return "question";
         if("COMMITMENT".equals(intent))return "commitment";
-        if("SCHEDULE".equals(intent))return "appointment";
         return "request";
     }
 
