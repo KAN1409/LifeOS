@@ -14,19 +14,14 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
-      - uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '8.9'
-      - run: gradle :app:testDebugUnitTest :app:assembleDebug
-      - uses: actions/upload-artifact@v4
-        with:
-          name: LifeOS-V2-transplant-preview-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
       - name: Pack Android apksigner toolchain
         run: |
           set -euo pipefail
           BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -n1)"
-          test -n "$BT"
+          if test -z "$BT"; then
+            sdkmanager 'build-tools;35.0.0'
+            BT="$ANDROID_HOME/build-tools/35.0.0"
+          fi
           test -x "$BT/apksigner"
           test -f "$BT/lib/apksigner.jar"
           mkdir -p "$RUNNER_TEMP/lifeos-apksigner/lib"
@@ -37,3 +32,11 @@ jobs:
         with:
           name: LifeOS-Android-apksigner-toolchain
           path: ${{ runner.temp }}/lifeos-apksigner
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - run: gradle :app:testDebugUnitTest :app:assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LifeOS-V2-transplant-preview-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
