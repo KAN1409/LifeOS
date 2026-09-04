@@ -21,6 +21,32 @@ public final class ObservationAdaptersTest {
         assertEquals("Please call me tomorrow", o.text);
         assertEquals("Ahmed", o.attributes.get("title"));
         assertEquals("Project A", o.attributes.get("conversation_title"));
+        assertEquals("", o.attributes.get("sender"));
+        assertEquals("false", o.attributes.get("structured_message"));
+    }
+
+    @Test public void notificationAdapterPreservesRichMessagingStructure() {
+        NotificationCapture capture = new NotificationCapture(
+                "key-2", "com.whatsapp", "Family", "Family", "Mona",
+                "Please bring the medicine", "msg", "messages",
+                true, false, 5678L);
+        RawObservation o = new NotificationObservationAdapter().adapt(capture);
+
+        assertEquals("com.whatsapp|family", o.streamId);
+        assertEquals("Mona", o.attributes.get("sender"));
+        assertEquals("msg", o.attributes.get("category"));
+        assertEquals("messages", o.attributes.get("channel_id"));
+        assertEquals("true", o.attributes.get("group_conversation"));
+        assertEquals("false", o.attributes.get("ongoing"));
+        assertEquals("true", o.attributes.get("structured_message"));
+    }
+
+    @Test public void senderBecomesStreamIdentityWhenConversationTitleIsMissing() {
+        NotificationCapture capture = new NotificationCapture(
+                "key-3", "com.whatsapp", "WhatsApp", "", "Ahmed",
+                "Are you coming?", "msg", "messages", false, false, 6789L);
+        RawObservation o = new NotificationObservationAdapter().adapt(capture);
+        assertEquals("com.whatsapp|ahmed", o.streamId);
     }
 
     @Test public void accessibilityAdapterPreservesRawTreePayload() {
