@@ -61,14 +61,21 @@ final class EventSemantics {
 
     static boolean isPersonConversation(LifeDb.Event e){return classify(e).personConversation;}
 
-    /** Whether an extracted open loop is semantically compatible with its source evidence. */
+    /** Whether an extracted or model-grounded open loop is compatible with its source evidence. */
     static boolean supportsLoop(LifeDb.Event e,String kind){
         if(e==null)return false;
         Assessment a=classify(e);
         String k=clean(kind).toLowerCase(Locale.ROOT);
+
+        // brain_* kinds are created only by NotificationBrain after confidence + structural gates.
+        // Re-run only a negative safety gate here; do not force a novel source back through the
+        // old keyword classifier or a valid model-recognized mail/call/bank source disappears.
+        if(k.startsWith("brain_"))
+            return !a.personConversation&&a.type!=Type.PROMOTION&&a.type!=Type.CONTENT_READY&&a.type!=Type.SYSTEM_EVENT;
+
         if("security".equals(k))return a.type==Type.SECURITY_ALERT;
         if("financial_alert".equals(k))return a.type==Type.FINANCIAL_ALERT;
-        if("request".equals(k)||"commitment".equals(k))return a.personConversation;
+        if("request".equals(k)||"commitment".equals(k)||"question".equals(k))return a.personConversation;
         if("appointment".equals(k))return a.personConversation||isCalendarLike(e.app);
         if("deadline".equals(k))return a.type!=Type.PROMOTION&&a.type!=Type.SYSTEM_EVENT&&a.type!=Type.CONTENT_READY&&a.type!=Type.DELIVERY;
         return a.personConversation;
