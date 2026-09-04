@@ -12,8 +12,8 @@ final class LifeOsIconView extends View {
     static final String LIFE="life",HOME="home",TIMELINE="timeline",SEARCH="search",ASK="ask",FILTER="filter",HISTORY="history",MORE="more",MIC="mic",SEND="send",CHEVRON="chevron",SCHOOL="school",CAR="car",COMMITMENT="commitment",DECISION="decision",PEOPLE="people",FILE="file",PLACE="place",EVENT="event",ALERT="alert",ACTION="action",UPCOMING="upcoming",CHECK="check",ACTIVITY="activity";
     private final String icon;private final int color;private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);private final Path path=new Path();
     LifeOsIconView(Context c,String icon,int color){super(c);this.icon=icon==null?ACTIVITY:icon;this.color=color;p.setStrokeCap(Paint.Cap.ROUND);p.setStrokeJoin(Paint.Join.ROUND);setWillNotDraw(false);}
-    @Override protected void onDraw(Canvas c){super.onDraw(c);float size=Math.min(getWidth(),getHeight());if(size<=0)return;float ox=(getWidth()-size)/2f,oy=(getHeight()-size)/2f;c.save();c.translate(ox,oy);c.scale(size/24f,size/24f);p.setColor(color);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.85f);path.reset();draw(c);c.restore();}
-    private void draw(Canvas c){switch(icon){
+    @Override protected void onDraw(Canvas c){super.onDraw(c);float size=Math.min(getWidth(),getHeight());if(size<=0)return;float ox=(getWidth()-size)/2f,oy=(getHeight()-size)/2f;c.save();c.translate(ox,oy);c.scale(size/24f,size/24f);p.setColor(color);p.setStyle(Paint.Style.STROKE);p.setStrokeWidth(1.85f);path.reset();drawIcon(c);c.restore();}
+    private void drawIcon(Canvas c){switch(icon){
         case LIFE:c.drawCircle(12,12,8.2f,p);break;
         case HOME:path.moveTo(3.5f,10.8f);path.lineTo(12,3.7f);path.lineTo(20.5f,10.8f);c.drawPath(path,p);c.drawRoundRect(new RectF(5.5f,9.6f,18.5f,20.3f),1.6f,1.6f,p);path.reset();path.moveTo(10,20.2f);path.lineTo(10,14.5f);path.lineTo(14,14.5f);path.lineTo(14,20.2f);c.drawPath(path,p);break;
         case TIMELINE:for(float y:new float[]{6,12,18}){p.setStyle(Paint.Style.FILL);c.drawCircle(5,y,1.3f,p);p.setStyle(Paint.Style.STROKE);c.drawLine(9,y,20,y,p);}break;
