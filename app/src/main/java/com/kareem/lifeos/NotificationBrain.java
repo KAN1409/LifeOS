@@ -90,7 +90,7 @@ final class NotificationBrain {
         try(LifeDb db=new LifeDb(context)){
             for(NotificationMeaning meaning:meanings){
                 store.put(meaning);
-                applyMeaning(db,meaning);
+                applyMeaning(context,db,meaning);
                 if(meaning.needsAttention())attention++;
             }
         }
@@ -101,7 +101,7 @@ final class NotificationBrain {
      * Replace heuristic thread loops with one current model-grounded state. This is deliberate
      * semantic compression: many notifications in one stream produce at most one active item.
      */
-    private static void applyMeaning(LifeDb db,NotificationMeaning meaning){
+    private static void applyMeaning(Context context,LifeDb db,NotificationMeaning meaning){
         if(db==null||meaning==null||!meaning.canSummarize())return;
         SQLiteDatabase sql=db.getWritableDatabase();long eventId=0;
         try(Cursor c=sql.rawQuery("SELECT id FROM events WHERE thread_key=? ORDER BY captured_at DESC LIMIT 1",new String[]{meaning.streamId})){
@@ -109,12 +109,16 @@ final class NotificationBrain {
         }
         if(eventId<=0)return;
 
+        LifeDb.Event source=db.eventById(eventId);
+        // A small subset of strongly grounded conversational states becomes compressed episodic
+        // memory. Raw message memory remains authoritative and is retained alongside this state.
+        LocalGroundedMemory.materializeMeaning(context,source,meaning);
+
         // Once the local brain has understood this current stream, its single grounded state
         // supersedes per-message keyword loops whether that state needs attention or not.
         sql.execSQL("UPDATE open_loops SET status='superseded' WHERE status='open' AND evidence_id IN (SELECT id FROM events WHERE thread_key=?)",new Object[]{meaning.streamId});
         if(!meaning.needsAttention())return;
 
-        LifeDb.Event source=db.eventById(eventId);
         if(!attentionCompatible(source,meaning))return;
         String kind=meaning.loopKind();
         String fingerprint="brain|"+meaning.sourceObservationId;
