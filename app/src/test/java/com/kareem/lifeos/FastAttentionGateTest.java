@@ -27,6 +27,15 @@ public final class FastAttentionGateTest {
         assertTrue(r.provisional);assertEquals("PERSON_CONVERSATION",r.type);
     }
 
+    @Test public void colloquialMorphologyGeneralizesBeyondSendVerb(){
+        assertTrue(FastAttentionGate.looksLikeColloquialDirectRequest("محتاجك تراجعلي الملف النهارده"));
+        assertTrue(FastAttentionGate.looksLikeColloquialDirectRequest("لو سمحت تكلمني لما تفضى"));
+    }
+
+    @Test public void urgencyWithoutSecondPersonActionIsNotEnough(){
+        assertFalse(FastAttentionGate.looksLikeColloquialDirectRequest("الموضوع ضروري جدا ومهم"));
+    }
+
     @Test public void ordinaryGreetingIsQueuedButNotSurfacedProvisionally(){
         String text="Hi";FastAttentionGate.Result r=FastAttentionGate.evaluate(event(text),raw(text),1000L);
         assertFalse(r.provisional);assertTrue(r.queuePriority>0);
