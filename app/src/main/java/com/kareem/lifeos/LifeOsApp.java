@@ -11,6 +11,11 @@ public final class LifeOsApp extends Application {
 
     @Override public void onCreate() {
         super.onCreate();
+        // Provision the swappable local model without blocking startup, and immediately attempt to
+        // drain durable semantic work left from a previous process/session.
+        try{BackgroundModelManager.provisionAsync(this);}catch(Throwable ignored){}
+        try{BackgroundBrain.poke(this);}catch(Throwable ignored){}
+
         registerActivityLifecycleCallbacks(new ActivityLifecycleCallbacks(){
             @Override public void onActivityCreated(Activity a,Bundle b){
                 // Android 15+ lays targetSdk 35 apps edge-to-edge. Apply real device insets
@@ -23,9 +28,17 @@ public final class LifeOsApp extends Application {
                 // Re-request insets after the activity has installed its content view. This also
                 // handles rotation and system-bar mode changes without fixed device padding.
                 try{SystemBars.apply(a);}catch(Throwable ignored){}
-                // Deep AICore inference is legal only while LifeOS is genuinely foreground.
-                // Trigger from every resumed LifeOS surface so Now never owns the brain lifecycle.
-                try{NotificationBrain.analyzeForeground(a,null);}catch(Throwable ignored){}
+
+                // Background LiteRT-LM is the primary semantic engine. A resumed LifeOS surface
+                // only gives the durable worker another opportunity to drain; it is not required
+                // for understanding to begin.
+                try{BackgroundBrain.poke(a);}catch(Throwable ignored){}
+
+                // Gemini Nano/AICore is fallback-only while the background model is still being
+                // provisioned. Never let both engines race over the same durable queue.
+                if(!BackgroundModelManager.isReadyFast(a)){
+                    try{NotificationBrain.analyzeForeground(a,null);}catch(Throwable ignored){}
+                }
             }
             @Override public void onActivityPaused(Activity a){synchronized(LifeOsApp.class){resumedActivities=Math.max(0,resumedActivities-1);}}
             @Override public void onActivityStopped(Activity a){}
