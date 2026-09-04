@@ -4,6 +4,7 @@ import android.content.Context;
 import com.kareem.lifeos.memory.MemoryRecord;
 import com.kareem.lifeos.memory.PersistentLifeMemoryStore;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -17,6 +18,7 @@ import java.util.Locale;
  */
 final class LocalGroundedMemory {
     private static final int MAX_TEXT = 600;
+    private static final double MEANING_MEMORY_CONFIDENCE = .82;
 
     private LocalGroundedMemory() {}
 
@@ -34,6 +36,33 @@ final class LocalGroundedMemory {
                 assertionId(event),
                 evidence,
                 event.at > 0 ? event.at : System.currentTimeMillis());
+    }
+
+    /**
+     * Persist a compressed model interpretation only when it is both strongly grounded and useful.
+     * Informational chatter never becomes a second semantic memory record merely because a model
+     * summarized it. The raw episodic message remains the source of truth and its event id is kept
+     * first in provenance so every semantic memory remains drillable back to evidence.
+     */
+    static long materializeMeaning(Context context, LifeDb.Event event, NotificationMeaning meaning) {
+        if (context == null || event == null || meaning == null) return -1L;
+        if (!EventSemantics.isPersonConversation(event)
+                || !"PERSON_CONVERSATION".equals(meaning.type)
+                || meaning.confidence < MEANING_MEMORY_CONFIDENCE
+                || !meaning.canSummarize()
+                || !meaningWorthRemembering(meaning)) return -1L;
+        String subject = subjectId(event);
+        if (subject.isEmpty() || meaning.summary.trim().isEmpty()) return -1L;
+        String assertion = "notification-meaning|" + meaning.sourceObservationId;
+        List<String> evidence = Arrays.asList(Long.toString(event.id), meaning.sourceObservationId);
+        return PersistentLifeMemoryStore.get(context).remember(
+                subject,
+                meaning.summary.trim(),
+                MemoryRecord.Category.EPISODIC,
+                null,
+                assertion,
+                evidence,
+                meaning.understoodAt > 0 ? meaning.understoodAt : System.currentTimeMillis());
     }
 
     /**
@@ -89,6 +118,13 @@ final class LocalGroundedMemory {
 
     static String assertionId(LifeDb.Event event) {
         return event == null ? "" : "life-event|" + event.id;
+    }
+
+    private static boolean meaningWorthRemembering(NotificationMeaning meaning) {
+        if (meaning == null) return false;
+        if ("WAITING_ON_USER".equals(meaning.state) || "WAITING_ON_OTHER".equals(meaning.state)) return true;
+        return "REQUEST".equals(meaning.intent) || "QUESTION".equals(meaning.intent)
+                || "COMMITMENT".equals(meaning.intent) || "SCHEDULE".equals(meaning.intent);
     }
 
     private static String memoryText(LifeDb.Event event) {
