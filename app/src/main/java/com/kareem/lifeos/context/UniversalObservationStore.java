@@ -6,6 +6,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import org.json.JSONObject;
@@ -70,20 +71,28 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
     public synchronized List<RawObservation> recent(int limit) {
         int safe = Math.max(1, Math.min(2000, limit));
         List<RawObservation> out = new ArrayList<RawObservation>();
-        Cursor c = getReadableDatabase().query("observations",
-                new String[]{"observation_id","source_kind","source_package","stream_id","event_type","observed_at","text","raw_payload","attributes_json"},
+        Cursor c = getReadableDatabase().query("observations", columns(),
                 null,null,null,null,"observed_at DESC,id DESC",Integer.toString(safe));
-        try {
-            while (c.moveToNext()) {
-                RawObservation.SourceKind kind;
-                try { kind = RawObservation.SourceKind.valueOf(c.getString(1)); }
-                catch (Exception e) { kind = RawObservation.SourceKind.OTHER; }
-                out.add(new RawObservation(c.getString(0), kind, c.getString(2), c.getString(3),
-                        c.getString(4), c.getLong(5), c.getString(6), c.getString(7),
-                        attributesMap(c.getString(8))));
-            }
-        } finally { c.close(); }
+        try { while (c.moveToNext()) out.add(read(c)); }
+        finally { c.close(); }
         return out;
+    }
+
+    /** Exact durable lookup used by the semantic queue; opening/dismissing the Android notification cannot remove it. */
+    public synchronized RawObservation byObservationId(String observationId) {
+        String id=observationId==null?"":observationId.trim();if(id.isEmpty())return null;
+        Cursor c=getReadableDatabase().query("observations",columns(),"observation_id=?",new String[]{id},null,null,null,"1");
+        try{return c.moveToFirst()?read(c):null;}finally{c.close();}
+    }
+
+    /** Chronological context ending at the target observation time. */
+    public synchronized List<RawObservation> streamThrough(String streamId,long throughAt,int limit) {
+        String stream=streamId==null?"":streamId.trim();if(stream.isEmpty())return Collections.emptyList();
+        int safe=Math.max(1,Math.min(50,limit));List<RawObservation> out=new ArrayList<RawObservation>();
+        Cursor c=getReadableDatabase().query("observations",columns(),"stream_id=? AND observed_at<=?",
+                new String[]{stream,String.valueOf(throughAt)},null,null,"observed_at DESC,id DESC",Integer.toString(safe));
+        try{while(c.moveToNext())out.add(read(c));}finally{c.close();}
+        Collections.reverse(out);return out;
     }
 
     public synchronized LifeContextSnapshot rebuildContext(int observationLimit, long rebuiltAt) {
@@ -119,6 +128,15 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
 
     private void trim() {
         getWritableDatabase().execSQL("DELETE FROM observations WHERE id NOT IN (SELECT id FROM observations ORDER BY id DESC LIMIT " + MAX_ROWS + ")");
+    }
+
+    private static String[] columns(){return new String[]{"observation_id","source_kind","source_package","stream_id","event_type","observed_at","text","raw_payload","attributes_json"};}
+    private static RawObservation read(Cursor c){
+        RawObservation.SourceKind kind;
+        try { kind = RawObservation.SourceKind.valueOf(c.getString(1)); }
+        catch (Exception e) { kind = RawObservation.SourceKind.OTHER; }
+        return new RawObservation(c.getString(0),kind,c.getString(2),c.getString(3),c.getString(4),
+                c.getLong(5),c.getString(6),c.getString(7),attributesMap(c.getString(8)));
     }
 
     private static String attributesJson(Map<String,String> values) {
