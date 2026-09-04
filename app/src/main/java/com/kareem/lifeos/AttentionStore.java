@@ -115,7 +115,9 @@ final class AttentionStore extends SQLiteOpenHelper {
         if(eventId<=0||safe(sourceObservationId).isEmpty())return;
         long now=System.currentTimeMillis();SQLiteDatabase db=getWritableDatabase();
         Item existing=forEvent(eventId);
-        if(existing!=null&&(HANDLED.equals(existing.status)||OPEN.equals(existing.status)))return;
+        // Replaying the same active Android notification must not resurrect a model-rejected,
+        // confirmed, or explicitly handled evidence item.
+        if(existing!=null&&(HANDLED.equals(existing.status)||OPEN.equals(existing.status)||REJECTED.equals(existing.status)))return;
         ContentValues v=values(sourceObservationId,streamId,eventId,sourceAt,PROVISIONAL,type,intent,urgency,action,
                 summary,reason,confidence,priority,"fast-local",true,now);
         if(existing!=null)v.put("created_at",existing.createdAt);
