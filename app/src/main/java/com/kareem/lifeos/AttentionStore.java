@@ -118,6 +118,7 @@ final class AttentionStore extends SQLiteOpenHelper {
         if(existing!=null&&(HANDLED.equals(existing.status)||OPEN.equals(existing.status)))return;
         ContentValues v=values(sourceObservationId,streamId,eventId,sourceAt,PROVISIONAL,type,intent,urgency,action,
                 summary,reason,confidence,priority,"fast-local",true,now);
+        if(existing!=null)v.put("created_at",existing.createdAt);
         if(existing==null)db.insertWithOnConflict("attention_items",null,v,SQLiteDatabase.CONFLICT_IGNORE);
         else db.update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});
     }
@@ -128,26 +129,31 @@ final class AttentionStore extends SQLiteOpenHelper {
         Item existing=forEvent(eventId);long now=System.currentTimeMillis();
         if(m.needsAttention()){
             if(existing!=null&&HANDLED.equals(existing.status)){
-                updateMeaningOnly(m,eventId,sourceAt,existing.status,existing.handledAt,now,false);
+                updateMeaningOnly(m,eventId,sourceAt,existing.status,existing.handledAt,now,false,existing);
                 return;
             }
             ContentValues v=values(m.sourceObservationId,m.streamId,eventId,sourceAt,OPEN,m.type,m.intent,m.urgency,m.action,
                     m.summary,m.reason,m.confidence,m.priority(),m.model,false,now);
+            if(existing!=null)v.put("created_at",existing.createdAt);
             if(existing==null)getWritableDatabase().insertWithOnConflict("attention_items",null,v,SQLiteDatabase.CONFLICT_IGNORE);
             else getWritableDatabase().update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});
             return;
         }
-        // A model may reject a provisional false positive, but confirmed OPEN/HANDLED items are
-        // never auto-closed. Only explicit Mark handled closes confirmed attention.
+        rejectProvisional(m,eventId,sourceAt);
+    }
+
+    /** Structural safety rejection is not HANDLED and can never close an already confirmed item. */
+    synchronized void rejectProvisional(NotificationMeaning m,long eventId,long sourceAt){
+        if(m==null||eventId<=0)return;Item existing=forEvent(eventId);
         if(existing!=null&&PROVISIONAL.equals(existing.status)){
-            updateMeaningOnly(m,eventId,sourceAt,REJECTED,0,now,false);
+            updateMeaningOnly(m,eventId,sourceAt,REJECTED,0,System.currentTimeMillis(),false,existing);
         }
     }
 
-    private void updateMeaningOnly(NotificationMeaning m,long eventId,long sourceAt,String status,long handledAt,long now,boolean provisional){
+    private void updateMeaningOnly(NotificationMeaning m,long eventId,long sourceAt,String status,long handledAt,long now,boolean provisional,Item existing){
         ContentValues v=values(m.sourceObservationId,m.streamId,eventId,sourceAt,status,m.type,m.intent,m.urgency,m.action,
                 m.summary,m.reason,m.confidence,m.priority(),m.model,provisional,now);
-        v.put("handled_at",handledAt);
+        v.put("handled_at",handledAt);if(existing!=null)v.put("created_at",existing.createdAt);
         getWritableDatabase().update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});
     }
 
