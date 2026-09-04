@@ -48,7 +48,7 @@ final class BackgroundModelManager {
     }
 
     /** Returns verified model file, or null while a durable DownloadManager job is pending. */
-    static File ensureReadyBlocking(Context context)throws Exception{
+    static synchronized File ensureReadyBlocking(Context context)throws Exception{
         Context app=context.getApplicationContext();File f=modelFile(app);SharedPreferences p=prefs(app);
         if(isReadyFast(app))return f;
 
