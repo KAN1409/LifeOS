@@ -28,10 +28,14 @@ import java.util.Set;
 public final class FeedActivity extends Activity {
     private static final int BG=Color.rgb(13,17,23),SURFACE=Color.rgb(22,27,34),BORDER=Color.rgb(48,54,61),TEXT=Color.rgb(230,237,243),MUTED=Color.rgb(139,148,158),GREEN=Color.rgb(63,185,80);
     private LifeDb db;private LinearLayout content;private SwipeRefreshLayout swipe;private TextView intelligenceStatus;
+    private int lastReady=-1,lastPending=-1;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final Runnable statusPoll=new Runnable(){@Override public void run(){
         if(isFinishing()||intelligenceStatus==null)return;
-        IntelligenceStatus.Snapshot s=updateIntelligenceStatus();
+        IntelligenceStatus.Snapshot s=IntelligenceStatus.snapshot(FeedActivity.this);
+        boolean changed=s.ready!=lastReady||s.pending!=lastPending;
+        updateIntelligenceStatus(s);
+        if(changed&&content!=null)refresh();
         if(swipe!=null&&swipe.isRefreshing()&&s.pending==0)swipe.setRefreshing(false);
         if(s.pending>0||(swipe!=null&&swipe.isRefreshing()))ui.postDelayed(this,750);
     }};
@@ -75,8 +79,9 @@ public final class FeedActivity extends Activity {
         ui.postDelayed(()->{if(!isFinishing()&&swipe!=null&&swipe.isRefreshing()){swipe.setRefreshing(false);updateIntelligenceStatus();}},12000);
     }
 
-    private IntelligenceStatus.Snapshot updateIntelligenceStatus(){
-        IntelligenceStatus.Snapshot s=IntelligenceStatus.snapshot(this);
+    private IntelligenceStatus.Snapshot updateIntelligenceStatus(){return updateIntelligenceStatus(IntelligenceStatus.snapshot(this));}
+    private IntelligenceStatus.Snapshot updateIntelligenceStatus(IntelligenceStatus.Snapshot s){
+        lastReady=s.ready;lastPending=s.pending;
         if(intelligenceStatus!=null){
             String line=s.line();
             if(swipe!=null&&swipe.isRefreshing())line="Checking… · "+s.ready+" ready · "+s.pending+" pending"+(s.provisional>0?" · "+s.provisional+" provisional":"");
