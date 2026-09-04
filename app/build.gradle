@@ -9,7 +9,7 @@ android {
         minSdk 26
         targetSdk 35
         versionCode 32
-        versionName '0.10.6-V2-local-grounded-memory'
+        versionName '0.10.6-V2-notification-brain'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
 
