@@ -1,6 +1,8 @@
 package com.kareem.lifeos;
 
 import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Handler;
 import android.os.Looper;
 import com.google.mlkit.genai.common.DownloadCallback;
@@ -87,11 +89,39 @@ final class NotificationBrain {
         try(LifeDb db=new LifeDb(context)){
             for(NotificationMeaning meaning:meanings){
                 store.put(meaning);
-                db.applyBrainMeaning(meaning);
+                applyMeaning(db,meaning);
                 if(meaning.needsAttention())attention++;
             }
         }
         return new Result("ready",modelName,meanings.size(),attention);
+    }
+
+    /**
+     * Replace heuristic thread loops with one current model-grounded state. This is deliberate
+     * semantic compression: many messages in one stream produce at most one active attention item.
+     */
+    private static void applyMeaning(LifeDb db,NotificationMeaning meaning){
+        if(db==null||meaning==null||meaning.confidence<0.62)return;
+        SQLiteDatabase sql=db.getWritableDatabase();long eventId=0;
+        try(Cursor c=sql.rawQuery("SELECT id FROM events WHERE thread_key=? ORDER BY captured_at DESC LIMIT 1",new String[]{meaning.streamId})){
+            if(c.moveToFirst())eventId=c.getLong(0);
+        }
+        if(eventId<=0)return;
+
+        sql.execSQL("UPDATE open_loops SET status='superseded' WHERE status='open' AND evidence_id IN (SELECT id FROM events WHERE thread_key=?)",new Object[]{meaning.streamId});
+        if(!meaning.needsAttention())return;
+
+        LifeDb.Event source=db.eventById(eventId);
+        String kind=meaning.loopKind();
+        // Person-conversation states can always be grounded structurally. Non-person alerts retain
+        // the conservative EventSemantics gate until the source classifier itself is model-backed.
+        if(source==null||!EventSemantics.supportsLoop(source,kind))return;
+        String fingerprint="brain|"+meaning.sourceObservationId;
+        long now=System.currentTimeMillis();
+        sql.execSQL("INSERT OR IGNORE INTO open_loops(evidence_id,fingerprint,kind,title,due_at,confidence,priority,status,created_at) VALUES(?,?,?,?,0,?,?, 'open',?)",
+                new Object[]{eventId,fingerprint,kind,meaning.summary,meaning.confidence,meaning.priority(),now});
+        sql.execSQL("UPDATE open_loops SET kind=?,title=?,confidence=?,priority=?,status='open' WHERE fingerprint=?",
+                new Object[]{kind,meaning.summary,meaning.confidence,meaning.priority(),fingerprint});
     }
 
     private static List<StreamBatch> pendingBatches(Context context){
@@ -130,7 +160,7 @@ final class NotificationBrain {
             }
             stream.put("messages",messages);input.put(stream);
         }
-        String instruction="You are the local semantic engine inside a personal notification organizer. Analyze each stream using ONLY the supplied evidence. Do not invent missing people, objects, dates, tasks, or outcomes. Treat the messages in each stream as chronological context, not separate unrelated notifications. Return ONLY a JSON array, one object for every input id, with these exact keys: id,type,intent,state,urgency,action,summary,reason,confidence. Allowed type: PERSON_CONVERSATION, SECURITY_ALERT, FINANCIAL_ALERT, TRANSACTION, DELIVERY, CONTENT_READY, PROMOTION, SYSTEM_EVENT, OTHER. Allowed intent: REQUEST, QUESTION, COMMITMENT, SCHEDULE, INFORMATION, ALERT, NONE. Allowed state: WAITING_ON_USER, WAITING_ON_OTHER, INFORMATIONAL, RESOLVED, UNKNOWN. Allowed urgency: HIGH, MEDIUM, LOW, NONE. Allowed action: REPLY, DO_TASK, VERIFY, PAY, REVIEW, NONE. summary must be one short glanceable sentence in the dominant language of the evidence and describe meaning, not notification UI wording. reason must be one short evidence-based explanation, not hidden reasoning. confidence must be 0 to 1. Use WAITING_ON_USER only when the evidence supports that the user is expected to do or answer something. Promotions, content-ready notices, routine system status, and informational messages should normally have action NONE.\nINPUT:\n"+input.toString();
+        String instruction="You are the local semantic engine inside a personal notification organizer. Analyze each stream using ONLY the supplied evidence. Do not invent missing people, objects, dates, tasks, or outcomes. Treat the messages in each stream as chronological context, not separate unrelated notifications. Return ONLY a JSON array, one object for every input id, with these exact keys: id,type,intent,state,urgency,action,summary,reason,confidence. Allowed type: PERSON_CONVERSATION, SECURITY_ALERT, FINANCIAL_ALERT, TRANSACTION, DELIVERY, CONTENT_READY, PROMOTION, SYSTEM_EVENT, OTHER. Allowed intent: REQUEST, QUESTION, COMMITMENT, SCHEDULE, INFORMATION, ALERT, NONE. Allowed state: WAITING_ON_USER, WAITING_ON_OTHER, INFORMATIONAL, RESOLVED, UNKNOWN. Allowed urgency: HIGH, MEDIUM, LOW, NONE. Allowed action: REPLY, DO_TASK, VERIFY, PAY,REVIEW, NONE. summary must be one short glanceable sentence in the dominant language of the evidence and describe meaning, not notification UI wording. reason must be one short evidence-based explanation, not hidden reasoning. confidence must be 0 to 1. Use WAITING_ON_USER only when the evidence supports that the user is expected to do or answer something. Promotions, content-ready notices, routine system status, and informational messages should normally have action NONE.\nINPUT:\n"+input.toString();
         return new PromptBundle(instruction,ids);
     }
 
