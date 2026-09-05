@@ -87,46 +87,91 @@ This checklist verifies **real backing capabilities**, not screen presence. A ca
 - [ ] Per-decision external evidence links are intentionally NOT claimed for manually recorded decisions.
 - [ ] Device proof: create/read/search one Decision Memory object end-to-end.
 
-## H. Search / capability discovery
+## H. Real Files provider
+- [x] Add durable `files` objects in `lifeos_user_objects.db`.
+- [x] File source is explicit Android Storage Access Framework document selection.
+- [x] Persist document URI access when Android grants it.
+- [x] Persist display name, MIME type, size, source and connected timestamp.
+- [x] File IDs are stable hashes of the selected content URI.
+- [x] Files count/list/search come from `FileRepository`, never filename regex over notifications.
+- [x] File detail reloads by stable file ID.
+- [x] `Open file` is a real Android `ACTION_VIEW` against the stored content URI.
+- [x] Ask explicitly knows file metadata only and is forbidden from pretending file content was parsed.
+- [ ] File-content parsing/indexing is intentionally NOT claimed yet.
+- [ ] Device proof: connect, search and open at least one document.
+
+## I. Real Places provider
+- [x] Add durable typed `places` in `lifeos_user_objects.db`.
+- [x] Place source is Android location evidence captured only after the user explicitly chooses Save current place.
+- [x] Persist label, latitude, longitude, accuracy, provider and observed timestamp.
+- [x] Places count/list/search come from `PlaceRepository`, not `office/cairo/zamalek` text matching.
+- [x] Location permission state is explicit; saved places remain browsable if permission is later unavailable.
+- [x] Place detail reloads by stable place ID.
+- [x] `Open on map` is a real geo intent.
+- [ ] Automatic visit/history inference is intentionally NOT claimed yet.
+- [ ] Device proof: save current place, search it and open it on a map.
+
+## J. Real Projects provider
+- [x] Add durable typed `projects` in `lifeos_user_objects.db`.
+- [x] Project source is explicit user creation, never a search result containing the word `project`.
+- [x] Persist name, description, status and timestamps.
+- [x] Project IDs are stable UUID-backed object IDs.
+- [x] Project count/list/search come only from `ProjectRepository`.
+- [x] Project detail reloads by stable ID.
+- [x] Project lifecycle supports Active ↔ Completed state changes.
+- [x] Project UI explicitly states that unlinked people/files/conversations are NOT automatically claimed as related.
+- [ ] Evidence-backed project membership/link graph is intentionally NOT claimed yet.
+- [ ] Device proof: create, search, open and complete/reopen one project.
+
+## K. Search / capability discovery
 - [x] Add `FunctionalCapabilityRegistry`.
-- [x] Normal Browse grid contains only capabilities with a concrete provider.
-- [x] Current providers: Conversations, Commitments, Decisions, People, Events.
+- [x] Browse grid contains only capabilities with concrete backing providers.
+- [x] Current real providers: People, Conversations, Files, Decisions, Places, Events, Projects, Commitments.
 - [x] People/Events show `Set up` when permission is missing rather than a synthetic count.
-- [x] Files is removed from the operational grid until a real file provider exists.
-- [x] Places is removed from the operational grid until a real place/visit provider exists.
-- [x] Projects is removed from the operational grid until a real project repository exists.
+- [x] Files / Places / Projects re-enter the grid only after receiving real repositories and real create/import/capture flows.
 - [x] Add `FunctionalSearchEngine` federating only typed provider objects.
+- [x] Search matching includes provider identity + real object fields, never raw capability keyword guesses over notifications.
 - [x] Search results carry `capability_id + object_id`.
 - [x] Search result navigation reloads the same backing object.
 - [ ] Device proof: Search grid/counts/statuses match provider reality.
 
-## I. Ask / grounding
+## L. Ask / grounding
 - [x] Add `GroundedQueryEngine` over canonical product providers.
 - [x] Ask no longer sums `AttentionStore.openCount + LifeDb.openLoopCount`.
 - [x] Ask no longer generates Project/File/Place prompts from heuristic capability results.
-- [x] Ask decision prompts come only from real Decision Memory objects.
-- [x] Ask suggestions come only from canonical obligations, persisted conversations, recorded decisions, real calendar events, real action proposals, or canonical timeline activity.
+- [x] Decision prompts come only from recorded Decision Memory objects.
+- [x] File/Place/Project suggestions can appear only when a real persisted object exists.
+- [x] Ask suggestions come only from canonical obligations, persisted conversations, typed user objects, real calendar events, real action proposals, or canonical timeline activity.
 - [x] Ask prompt explicitly forbids inventing absent capabilities/relations/actions.
+- [x] Ask prompt explicitly forbids pretending connected file contents were read when only URI/metadata is available.
 - [x] Fallback response is built from canonical provider objects.
 - [ ] Production V2 Life Model/Deep Brain transport still not the canonical Ask transport.
-- [ ] Device proof for attention, conversation, decision and recent-timeline questions.
+- [ ] Device proof for attention, conversation, decision, project/file/place and recent-timeline questions.
 
-## J. Real actions
+## M. Real actions
 - [x] Ready-actions count still comes from `PersistentActionQueue` only.
 - [x] Existing Teya approval/execution bridge remains approval-gated.
-- [x] New person/calendar actions are direct real Android intents, not descriptive buttons.
+- [x] Person Call/Message actions use real Android intents.
+- [x] Calendar Open action uses a real Android Calendar URI.
+- [x] File Open action uses the persisted Android document URI.
+- [x] Place Open action uses a real geo intent.
+- [x] Project status action changes durable project state.
 - [ ] General typed V2 Android `ActionExecutor` remains future work.
 - [ ] Outcome-as-observation loop remains future work for general actions.
 
-## K. Explicitly NOT operational in v44
-- [ ] Files — needs real URI/MIME/provenance repository.
-- [ ] Places — needs source/permission + persisted Place/Visit model.
-- [ ] Projects — needs explicit project objects and evidence-backed membership edges.
-- [ ] Generic cross-domain relationship graph — V2 foundations exist, but primary UI does not claim it as complete.
+## N. Explicitly NOT claimed in v44
+- [ ] Automatic file-content understanding/indexing.
+- [ ] Automatic place/visit history inference.
+- [ ] Automatic project membership/relationship inference.
+- [ ] Automatic ambient decision extraction with evidence links.
+- [ ] Cross-source People ↔ Conversation identity linking without explicit canonical evidence.
+- [ ] Generic cross-domain relationship graph as a finished product feature.
+- [ ] Full V2 Deep Brain transport as the canonical Ask/priority engine.
+- [ ] General typed Android ActionExecutor with outcome-as-observation loop.
 
-These unchecked items are **not failures hidden behind UI**. They are deliberately absent from operational product surfaces until their end-to-end chain is real.
+These unchecked items are **not failures hidden behind UI**. The primary product is required to state the narrower capability it actually has rather than imply these deeper layers already exist.
 
-## L. Automated safety gates
+## O. Automated safety gates
 - [x] Add `CanonicalSemanticPolicyTest` for reaction/information/request/provisional/promotion cases.
 - [ ] Android unit tests pass in CI.
 - [ ] Release APK assembles in CI.
@@ -139,7 +184,7 @@ These unchecked items are **not failures hidden behind UI**. They are deliberate
 - [ ] Final APK SHA-256 recorded.
 - [ ] PR remains draft/open/unmerged.
 
-## M. Device acceptance
+## P. Device acceptance
 - [ ] Install directly over v43 without uninstall.
 - [ ] Now screenshot verified.
 - [ ] Timeline screenshot verified.
@@ -148,6 +193,9 @@ These unchecked items are **not failures hidden behind UI**. They are deliberate
 - [ ] Open one Commitment by stable ID and inspect evidence.
 - [ ] Open one Conversation by stable ID and inspect evidence.
 - [ ] Open one recorded Decision by stable ID and inspect its stored fields.
+- [ ] Connect/open one File.
+- [ ] Save/open one Place.
+- [ ] Create/complete/reopen one Project.
 - [ ] Open one Contact-backed Person and exercise Dial/Message path.
 - [ ] Open one Calendar-backed Event and exercise Open in Calendar.
 - [ ] Verify all visible counts agree across surfaces.
