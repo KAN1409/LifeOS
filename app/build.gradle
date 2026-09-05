@@ -23,5 +23,11 @@ dependencies {
     implementation 'com.google.mlkit:genai-prompt:1.0.0-beta4'
     implementation 'com.google.ai.edge.litertlm:litertlm-android:0.16.0'
     implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
+
+    // OCR quality lab: multi-pass local Latin + Arabic engines. Images stay out of normal product UI until benchmark gates pass.
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+    implementation 'cz.adaptech.tesseract4android:tesseract4android:4.9.0'
+    implementation 'androidx.exifinterface:exifinterface:1.3.7'
+
     testImplementation 'junit:junit:4.13.2'
 }
