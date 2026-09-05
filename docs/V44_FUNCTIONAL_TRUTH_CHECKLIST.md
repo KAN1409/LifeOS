@@ -126,9 +126,10 @@ This checklist verifies **real backing capabilities**, not screen presence. A ca
 ## K. Search / capability discovery
 - [x] Add `FunctionalCapabilityRegistry`.
 - [x] Browse grid contains only capabilities with concrete backing providers.
-- [x] Current real providers: People, Conversations, Files, Decisions, Places, Events, Projects, Commitments.
+- [x] Current real providers: People, Conversations, Voice Memories, Files, Decisions, Places, Events, Projects, Commitments.
 - [x] People/Events show `Set up` when permission is missing rather than a synthetic count.
 - [x] Files / Places / Projects re-enter the grid only after receiving real repositories and real create/import/capture flows.
+- [x] Voice Memories enters the grid only after real WAV capture + durable store + playback/retry paths exist.
 - [x] Add `FunctionalSearchEngine` federating only typed provider objects.
 - [x] Search matching includes provider identity + real object fields, never raw capability keyword guesses over notifications.
 - [x] Search results carry `capability_id + object_id`.
@@ -140,13 +141,15 @@ This checklist verifies **real backing capabilities**, not screen presence. A ca
 - [x] Ask no longer sums `AttentionStore.openCount + LifeDb.openLoopCount`.
 - [x] Ask no longer generates Project/File/Place prompts from heuristic capability results.
 - [x] Decision prompts come only from recorded Decision Memory objects.
-- [x] File/Place/Project suggestions can appear only when a real persisted object exists.
+- [x] File/Place/Project/Voice suggestions can appear only when a real persisted object exists.
 - [x] Ask suggestions come only from canonical obligations, persisted conversations, typed user objects, real calendar events, real action proposals, or canonical timeline activity.
 - [x] Ask prompt explicitly forbids inventing absent capabilities/relations/actions.
 - [x] Ask prompt explicitly forbids pretending connected file contents were read when only URI/metadata is available.
+- [x] `Ask about this` supports stable focused object IDs.
+- [x] Focused Voice Memory grounding supplies a verbatim transcript only when a stored transcript really exists.
 - [x] Fallback response is built from canonical provider objects.
 - [ ] Production V2 Life Model/Deep Brain transport still not the canonical Ask transport.
-- [ ] Device proof for attention, conversation, decision, project/file/place and recent-timeline questions.
+- [ ] Device proof for attention, conversation, decision, project/file/place/voice and recent-timeline questions.
 
 ## M. Real actions
 - [x] Ready-actions count still comes from `PersistentActionQueue` only.
@@ -156,6 +159,8 @@ This checklist verifies **real backing capabilities**, not screen presence. A ca
 - [x] File Open action uses the persisted Android document URI.
 - [x] Place Open action uses a real geo intent.
 - [x] Project status action changes durable project state.
+- [x] Voice playback reads the actual saved WAV.
+- [x] Voice re-transcription retries against the same saved source audio.
 - [ ] General typed V2 Android `ActionExecutor` remains future work.
 - [ ] Outcome-as-observation loop remains future work for general actions.
 
@@ -168,10 +173,40 @@ This checklist verifies **real backing capabilities**, not screen presence. A ca
 - [ ] Generic cross-domain relationship graph as a finished product feature.
 - [ ] Full V2 Deep Brain transport as the canonical Ask/priority engine.
 - [ ] General typed Android ActionExecutor with outcome-as-observation loop.
+- [ ] Always-on/background ambient voice recording.
+- [ ] Speaker diarization or call recording.
 
 These unchecked items are **not failures hidden behind UI**. The primary product is required to state the narrower capability it actually has rather than imply these deeper layers already exist.
 
-## O. Experimental OCR quality gate — NOT yet a normal Images capability
+## O. Real Voice Memory provider
+- [x] Add `V44_VOICE_MEMORY_ARCHITECTURE.md`.
+- [x] Migrate the proven Cortex `AudioRecord` WAV capture architecture into LifeOS.
+- [x] Record real 16 kHz mono PCM16 WAV audio.
+- [x] Save source audio before any transcription attempt.
+- [x] Add durable `lifeos_voice_memory.db` store.
+- [x] Voice Memory objects use stable `voice:<id>` IDs.
+- [x] Persist source path, timestamp, duration, size and lifecycle state.
+- [x] Persist verbatim transcript/language/engine/version when transcription succeeds.
+- [x] Persist timestamped transcript segments + confidence.
+- [x] Migrate the Cortex mixed Arabic/English server-side transcription flow.
+- [x] Keep ASR provider credentials server-side; no ASR provider key in APK.
+- [x] Same-host HTTPS redirect validation retained.
+- [x] Failed transcription leaves the WAV intact and exposes retry.
+- [x] Add real local playback.
+- [x] Add Voice Memories as a typed Search capability.
+- [x] Search transcript text only when a real transcript exists.
+- [x] Add Now → Quick capture → Voice.
+- [x] Keep Ask microphone separate from Voice Memory capture.
+- [x] `Ask about this voice memory` grounds by stable object ID.
+- [ ] Device proof: record → stop → saved WAV.
+- [ ] Device proof: playback works after leaving/reopening the screen.
+- [ ] Device proof: Arabic-only transcription quality.
+- [ ] Device proof: mixed Arabic/English transcription quality.
+- [ ] Device proof: offline/transcription failure keeps audio and Retry works.
+- [ ] Device proof: Search finds a known spoken phrase.
+- [ ] Device proof: focused Ask uses the exact stored transcript.
+
+## P. Experimental OCR quality gate — NOT yet a normal Images capability
 - [x] Add `V44_OCR_QUALITY_ARCHITECTURE.md` with an explicit promotion contract.
 - [x] Add durable `ImageOcrStore`; source image metadata survives OCR failure and OCR engine replacement.
 - [x] Add stable `image:<id>` objects for explicitly selected images.
@@ -204,7 +239,7 @@ These unchecked items are **not failures hidden behind UI**. The primary product
 - [ ] Only after passing the gate: expose Image in normal Quick Capture.
 - [ ] Device proof: Arabic OCR quality substantially exceeds the old Cortex OCR on the benchmark corpus.
 
-## P. Automated safety gates
+## Q. Automated safety gates
 - [x] Add `CanonicalSemanticPolicyTest` for reaction/information/request/provisional/promotion cases.
 - [x] Add `OcrQualityTest` for Arabic normalization, critical tokens, digit equivalence and duplicate-line fusion.
 - [ ] Android unit tests pass in CI on the final v44 head.
@@ -218,11 +253,11 @@ These unchecked items are **not failures hidden behind UI**. The primary product
 - [ ] Final APK SHA-256 recorded.
 - [ ] PR remains draft/open/unmerged.
 
-## Q. Device acceptance
+## R. Device acceptance
 - [ ] Install directly over v43 without uninstall.
-- [ ] Now screenshot verified.
+- [ ] Now screenshot verified, including Quick capture.
 - [ ] Timeline screenshot verified.
-- [ ] Search screenshot verified.
+- [ ] Search screenshot verified, including Voice Memories.
 - [ ] Ask screenshot verified.
 - [ ] Open one Commitment by stable ID and inspect evidence.
 - [ ] Open one Conversation by stable ID and inspect evidence.
@@ -230,6 +265,7 @@ These unchecked items are **not failures hidden behind UI**. The primary product
 - [ ] Connect/open one File.
 - [ ] Save/open one Place.
 - [ ] Create/complete/reopen one Project.
+- [ ] Record/play/reopen one Voice Memory.
 - [ ] Open one Contact-backed Person and exercise Dial/Message path.
 - [ ] Open one Calendar-backed Event and exercise Open in Calendar.
 - [ ] Verify all visible counts agree across surfaces.
