@@ -12,7 +12,8 @@ import java.util.List;
  * Durable attention ledger plus semantic work queue.
  *
  * Seeing/opening/dismissing a source notification never mutates attention state here. Confirmed
- * attention remains OPEN until the user explicitly marks the item handled inside LifeOS.
+ * attention remains OPEN until the user explicitly marks the item handled, or later semantic
+ * reconciliation proves the promotion itself was wrong and retracts it.
  */
 final class AttentionStore extends SQLiteOpenHelper {
     private static final String DB="lifeos_attention.db";
@@ -90,116 +91,49 @@ final class AttentionStore extends SQLiteOpenHelper {
         return out;
     }
 
-    synchronized void markAttempt(String observationId){
-        getWritableDatabase().execSQL("UPDATE semantic_queue SET attempts=attempts+1 WHERE observation_id=? AND status='pending'",new Object[]{safe(observationId)});
-    }
-    synchronized void markFailure(String observationId,String error){
-        getWritableDatabase().execSQL("UPDATE semantic_queue SET last_error=? WHERE observation_id=? AND status='pending'",new Object[]{clip(safe(error),240),safe(observationId)});
-    }
-    synchronized void markAnalyzed(String observationId,long eventId){
-        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();
-        try{
-            db.execSQL("UPDATE semantic_queue SET status='done',last_error='' WHERE observation_id=?",new Object[]{safe(observationId)});
-            if(eventId>0)db.execSQL("UPDATE semantic_queue SET status='done',last_error='' WHERE event_id=? AND status='pending'",new Object[]{eventId});
-            db.setTransactionSuccessful();
-        }finally{db.endTransaction();}
-    }
-    synchronized void markOrphaned(String observationId){
-        getWritableDatabase().execSQL("UPDATE semantic_queue SET status='orphaned',last_error='raw observation no longer available' WHERE observation_id=?",new Object[]{safe(observationId)});
-    }
+    synchronized void markAttempt(String observationId){getWritableDatabase().execSQL("UPDATE semantic_queue SET attempts=attempts+1 WHERE observation_id=? AND status='pending'",new Object[]{safe(observationId)});}
+    synchronized void markFailure(String observationId,String error){getWritableDatabase().execSQL("UPDATE semantic_queue SET last_error=? WHERE observation_id=? AND status='pending'",new Object[]{clip(safe(error),240),safe(observationId)});}
+    synchronized void markAnalyzed(String observationId,long eventId){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.execSQL("UPDATE semantic_queue SET status='done',last_error='' WHERE observation_id=?",new Object[]{safe(observationId)});if(eventId>0)db.execSQL("UPDATE semantic_queue SET status='done',last_error='' WHERE event_id=? AND status='pending'",new Object[]{eventId});db.setTransactionSuccessful();}finally{db.endTransaction();}}
+    synchronized void markOrphaned(String observationId){getWritableDatabase().execSQL("UPDATE semantic_queue SET status='orphaned',last_error='raw observation no longer available' WHERE observation_id=?",new Object[]{safe(observationId)});}
 
-    /** Fast local gate may create a provisional item, never a handled item. */
-    synchronized void provisional(String sourceObservationId,String streamId,long eventId,long sourceAt,
-                                  String type,String intent,String urgency,String action,String summary,
-                                  String reason,double confidence,int priority){
-        if(eventId<=0||safe(sourceObservationId).isEmpty())return;
-        long now=System.currentTimeMillis();SQLiteDatabase db=getWritableDatabase();
-        Item existing=forEvent(eventId);
-        // Replaying the same active Android notification must not resurrect a model-rejected,
-        // confirmed, or explicitly handled evidence item.
+    synchronized void provisional(String sourceObservationId,String streamId,long eventId,long sourceAt,String type,String intent,String urgency,String action,String summary,String reason,double confidence,int priority){
+        if(eventId<=0||safe(sourceObservationId).isEmpty())return;long now=System.currentTimeMillis();SQLiteDatabase db=getWritableDatabase();Item existing=forEvent(eventId);
         if(existing!=null&&(HANDLED.equals(existing.status)||OPEN.equals(existing.status)||REJECTED.equals(existing.status)))return;
-        ContentValues v=values(sourceObservationId,streamId,eventId,sourceAt,PROVISIONAL,type,intent,urgency,action,
-                summary,reason,confidence,priority,"fast-local",true,now);
-        if(existing!=null)v.put("created_at",existing.createdAt);
-        if(existing==null)db.insertWithOnConflict("attention_items",null,v,SQLiteDatabase.CONFLICT_IGNORE);
-        else db.update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});
+        ContentValues v=values(sourceObservationId,streamId,eventId,sourceAt,PROVISIONAL,type,intent,urgency,action,summary,reason,confidence,priority,"fast-local",true,now);if(existing!=null)v.put("created_at",existing.createdAt);if(existing==null)db.insertWithOnConflict("attention_items",null,v,SQLiteDatabase.CONFLICT_IGNORE);else db.update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});
     }
 
-    /** Deep model confirms/rejects only this evidence item; it never closes another open item. */
     synchronized void applyModel(NotificationMeaning m,long eventId,long sourceAt){
-        if(m==null||eventId<=0)return;
-        Item existing=forEvent(eventId);long now=System.currentTimeMillis();
+        if(m==null||eventId<=0)return;Item existing=forEvent(eventId);long now=System.currentTimeMillis();
         if(m.needsAttention()){
-            if(existing!=null&&HANDLED.equals(existing.status)){
-                updateMeaningOnly(m,eventId,sourceAt,existing.status,existing.handledAt,now,false,existing);
-                return;
-            }
-            ContentValues v=values(m.sourceObservationId,m.streamId,eventId,sourceAt,OPEN,m.type,m.intent,m.urgency,m.action,
-                    m.summary,m.reason,m.confidence,m.priority(),m.model,false,now);
-            if(existing!=null)v.put("created_at",existing.createdAt);
-            if(existing==null)getWritableDatabase().insertWithOnConflict("attention_items",null,v,SQLiteDatabase.CONFLICT_IGNORE);
-            else getWritableDatabase().update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});
-            return;
+            if(existing!=null&&HANDLED.equals(existing.status)){updateMeaningOnly(m,eventId,sourceAt,existing.status,existing.handledAt,now,false,existing);return;}
+            ContentValues v=values(m.sourceObservationId,m.streamId,eventId,sourceAt,OPEN,m.type,m.intent,m.urgency,m.action,m.summary,m.reason,m.confidence,m.priority(),m.model,false,now);if(existing!=null)v.put("created_at",existing.createdAt);if(existing==null)getWritableDatabase().insertWithOnConflict("attention_items",null,v,SQLiteDatabase.CONFLICT_IGNORE);else getWritableDatabase().update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});return;
         }
         rejectProvisional(m,eventId,sourceAt);
     }
 
-    /** Structural safety rejection is not HANDLED and can never close an already confirmed item. */
+    /** A newer grounded model rejection may retract a previously OPEN false promotion. */
     synchronized void rejectProvisional(NotificationMeaning m,long eventId,long sourceAt){
         if(m==null||eventId<=0)return;Item existing=forEvent(eventId);
-        if(existing!=null&&PROVISIONAL.equals(existing.status)){
-            updateMeaningOnly(m,eventId,sourceAt,REJECTED,0,System.currentTimeMillis(),false,existing);
-        }
+        if(existing!=null&&(PROVISIONAL.equals(existing.status)||OPEN.equals(existing.status)))updateMeaningOnly(m,eventId,sourceAt,REJECTED,0,System.currentTimeMillis(),false,existing);
     }
 
-    private void updateMeaningOnly(NotificationMeaning m,long eventId,long sourceAt,String status,long handledAt,long now,boolean provisional,Item existing){
-        ContentValues v=values(m.sourceObservationId,m.streamId,eventId,sourceAt,status,m.type,m.intent,m.urgency,m.action,
-                m.summary,m.reason,m.confidence,m.priority(),m.model,provisional,now);
-        v.put("handled_at",handledAt);if(existing!=null)v.put("created_at",existing.createdAt);
-        getWritableDatabase().update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});
+    /** Product-level reconciliation can retract a false positive without pretending the user handled it. */
+    synchronized void retract(long eventId,String why){
+        if(eventId<=0)return;long now=System.currentTimeMillis();
+        getWritableDatabase().execSQL("UPDATE attention_items SET status='rejected',provisional=0,reason=?,updated_at=?,handled_at=0 WHERE event_id=? AND status IN ('open','provisional')",new Object[]{clip(safe(why),260),now,eventId});
     }
 
-    synchronized void markHandled(long eventId){
-        long now=System.currentTimeMillis();
-        getWritableDatabase().execSQL("UPDATE attention_items SET status='handled',provisional=0,handled_at=?,updated_at=? WHERE event_id=? AND status IN ('open','provisional')",new Object[]{now,now,eventId});
-    }
+    private void updateMeaningOnly(NotificationMeaning m,long eventId,long sourceAt,String status,long handledAt,long now,boolean provisional,Item existing){ContentValues v=values(m.sourceObservationId,m.streamId,eventId,sourceAt,status,m.type,m.intent,m.urgency,m.action,m.summary,m.reason,m.confidence,m.priority(),m.model,provisional,now);v.put("handled_at",handledAt);if(existing!=null)v.put("created_at",existing.createdAt);getWritableDatabase().update("attention_items",v,"event_id=?",new String[]{String.valueOf(eventId)});}
+    synchronized void markHandled(long eventId){long now=System.currentTimeMillis();getWritableDatabase().execSQL("UPDATE attention_items SET status='handled',provisional=0,handled_at=?,updated_at=? WHERE event_id=? AND status IN ('open','provisional')",new Object[]{now,now,eventId});}
 
-    synchronized Item forEvent(long eventId){
-        if(eventId<=0)return null;
-        try(Cursor c=getReadableDatabase().rawQuery(select()+" WHERE event_id=? LIMIT 1",new String[]{String.valueOf(eventId)})){
-            return c.moveToFirst()?read(c):null;
-        }
-    }
-
-    synchronized List<Item> openItems(int limit){
-        ArrayList<Item> out=new ArrayList<>();
-        try(Cursor c=getReadableDatabase().rawQuery(select()+" WHERE status IN ('open','provisional') ORDER BY priority DESC,updated_at DESC LIMIT ?",new String[]{String.valueOf(Math.max(1,limit))})){
-            while(c.moveToNext())out.add(read(c));
-        }
-        return out;
-    }
-
-    synchronized int openCount(){
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM attention_items WHERE status IN ('open','provisional')",null)){return c.moveToFirst()?c.getInt(0):0;}
-    }
-    synchronized int pendingCount(){
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM semantic_queue WHERE status='pending'",null)){return c.moveToFirst()?c.getInt(0):0;}
-    }
-    synchronized int confirmedOpenCount(){
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM attention_items WHERE status='open'",null)){return c.moveToFirst()?c.getInt(0):0;}
-    }
+    synchronized Item forEvent(long eventId){if(eventId<=0)return null;try(Cursor c=getReadableDatabase().rawQuery(select()+" WHERE event_id=? LIMIT 1",new String[]{String.valueOf(eventId)})){return c.moveToFirst()?read(c):null;}}
+    synchronized List<Item> openItems(int limit){ArrayList<Item> out=new ArrayList<>();try(Cursor c=getReadableDatabase().rawQuery(select()+" WHERE status IN ('open','provisional') ORDER BY priority DESC,updated_at DESC LIMIT ?",new String[]{String.valueOf(Math.max(1,limit))})){while(c.moveToNext())out.add(read(c));}return out;}
+    synchronized int openCount(){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM attention_items WHERE status IN ('open','provisional')",null)){return c.moveToFirst()?c.getInt(0):0;}}
+    synchronized int pendingCount(){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM semantic_queue WHERE status='pending'",null)){return c.moveToFirst()?c.getInt(0):0;}}
+    synchronized int confirmedOpenCount(){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM attention_items WHERE status='open'",null)){return c.moveToFirst()?c.getInt(0):0;}}
     synchronized void eraseAll(){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("semantic_queue",null,null);db.delete("attention_items",null,null);db.setTransactionSuccessful();}finally{db.endTransaction();}}
 
-    private static ContentValues values(String observationId,String streamId,long eventId,long sourceAt,String status,
-                                        String type,String intent,String urgency,String action,String summary,String reason,
-                                        double confidence,int priority,String model,boolean provisional,long now){
-        ContentValues v=new ContentValues();v.put("event_id",eventId);v.put("source_observation_id",safe(observationId));v.put("stream_id",safe(streamId));
-        v.put("source_at",sourceAt);v.put("status",safe(status));v.put("type",safe(type));v.put("intent",safe(intent));v.put("urgency",safe(urgency));
-        v.put("action",safe(action));v.put("summary",clip(safe(summary),220));v.put("reason",clip(safe(reason),260));v.put("confidence",Math.max(0,Math.min(1,confidence)));
-        v.put("priority",priority);v.put("model",safe(model));v.put("provisional",provisional?1:0);v.put("updated_at",now);v.put("handled_at",0);
-        v.put("created_at",now);return v;
-    }
-
+    private static ContentValues values(String observationId,String streamId,long eventId,long sourceAt,String status,String type,String intent,String urgency,String action,String summary,String reason,double confidence,int priority,String model,boolean provisional,long now){ContentValues v=new ContentValues();v.put("event_id",eventId);v.put("source_observation_id",safe(observationId));v.put("stream_id",safe(streamId));v.put("source_at",sourceAt);v.put("status",safe(status));v.put("type",safe(type));v.put("intent",safe(intent));v.put("urgency",safe(urgency));v.put("action",safe(action));v.put("summary",clip(safe(summary),220));v.put("reason",clip(safe(reason),260));v.put("confidence",Math.max(0,Math.min(1,confidence)));v.put("priority",priority);v.put("model",safe(model));v.put("provisional",provisional?1:0);v.put("updated_at",now);v.put("handled_at",0);v.put("created_at",now);return v;}
     private static String select(){return "SELECT id,event_id,source_at,created_at,updated_at,handled_at,priority,source_observation_id,stream_id,status,type,intent,urgency,action,summary,reason,model,confidence,provisional FROM attention_items";}
     private static Item read(Cursor c){return new Item(c.getLong(0),c.getLong(1),c.getLong(2),c.getLong(3),c.getLong(4),c.getLong(5),c.getInt(6),c.getString(7),c.getString(8),c.getString(9),c.getString(10),c.getString(11),c.getString(12),c.getString(13),c.getString(14),c.getString(15),c.getString(16),c.getDouble(17),c.getInt(18)!=0);}
     private static String safe(String x){return x==null?"":x;}
