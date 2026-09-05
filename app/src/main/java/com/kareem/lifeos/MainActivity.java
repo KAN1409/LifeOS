@@ -3,63 +3,31 @@ package com.kareem.lifeos;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Bundle;
 import android.provider.Settings;
-import android.text.TextUtils;
+import android.view.Gravity;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
-import com.kareem.lifeos.engine.CanonicalEventRecord;
-import com.kareem.lifeos.engine.PersistentUnderstandingStore;
-import com.kareem.lifeos.engine.UnderstandingEngineVersion;
-import com.kareem.lifeos.engine.UnderstandingReplayEngine;
-import java.text.DateFormat;
-import java.util.Date;
-import java.util.List;
+import com.kareem.lifeos.context.UniversalObservationStore;
+import com.kareem.lifeos.memory.PersistentLifeMemoryStore;
 
+/** Human-facing LifeOS status reached from the status ring or avatar. */
 public final class MainActivity extends Activity {
-    private static final int BG=Color.rgb(8,10,12),CARD=Color.rgb(20,23,25),TEXT=Color.rgb(244,247,248),MUTED=Color.rgb(158,166,170),ACCENT=Color.rgb(184,226,74);
-    private LifeDb db;private LinearLayout content;private TextView status;
-
-    @Override public void onCreate(Bundle state){super.onCreate(state);db=new LifeDb(this);render();startReplayIfNeeded();}
-    @Override protected void onResume(){super.onResume();if(content!=null)refresh();}
-    @Override protected void onDestroy(){if(db!=null)db.close();super.onDestroy();}
-
-    private void startReplayIfNeeded(){
-        new Thread(new Runnable(){@Override public void run(){try{final boolean rebuilt=UnderstandingReplayEngine.replayIfNeeded(MainActivity.this);if(rebuilt)runOnUiThread(new Runnable(){@Override public void run(){if(status!=null)refresh();}});}catch(Throwable ignored){}}},"lifeos-understanding-replay").start();
-    }
-
-    private void render(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);root.setPadding(dp(20),dp(18),dp(20),dp(18));
-        TextView title=text("LifeOS",32,TEXT);title.setTypeface(null,1);root.addView(title);
-        root.addView(text("Your phone context, understood locally",13,MUTED));
-        status=text("",12,MUTED);status.setPadding(0,dp(16),0,dp(8));root.addView(status);
-
-        Button access=button("MANAGE NOTIFICATION ACCESS");access.setOnClickListener(v->startActivity(new Intent("android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS")));root.addView(access,lp(dp(8)));
-        Button screen=button("MANAGE SCREEN CONTEXT ACCESS");screen.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));root.addView(screen,lp(dp(8)));
-        LinearLayout tabs=new LinearLayout(this);tabs.setOrientation(LinearLayout.HORIZONTAL);
-        Button recent=button("RECENT"),canonical=button("CANONICAL M1"),loops=button("OPEN LOOPS");
-        tabs.addView(recent,new LinearLayout.LayoutParams(0,dp(48),1));LinearLayout.LayoutParams mid=new LinearLayout.LayoutParams(0,dp(48),1);mid.setMargins(dp(8),0,0,0);tabs.addView(canonical,mid);LinearLayout.LayoutParams right=new LinearLayout.LayoutParams(0,dp(48),1);right.setMargins(dp(8),0,0,0);tabs.addView(loops,right);root.addView(tabs,lp(dp(10)));
-        ScrollView scroll=new ScrollView(this);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);scroll.addView(content);root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1));
-        Button erase=button("ERASE ALL LOCAL DATA");erase.setTextColor(Color.rgb(255,145,145));erase.setOnClickListener(v->confirmErase());root.addView(erase,lp(dp(8)));
-        recent.setOnClickListener(v->showRecent());canonical.setOnClickListener(v->showCanonical());loops.setOnClickListener(v->showLoops());setContentView(root);refresh();
-    }
-    private void refresh(){String notifications=Settings.Secure.getString(getContentResolver(),"enabled_notification_listeners"),services=Settings.Secure.getString(getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);boolean enabled=notifications!=null&&notifications.contains(getPackageName()),screen=services!=null&&services.contains(getPackageName()+"/"+LifeScreenContextService.class.getName());PersistentUnderstandingStore u=PersistentUnderstandingStore.get(this);String version=u.canonicalEngineVersion();if(blank(version))version="pending";status.setText((enabled?"● Notifications":"○ Notifications")+"   "+(screen?"● Screen context":"○ Screen context")+"\n"+db.count("events")+" stored events   ·   "+db.count("open_loops")+" loops   ·   M1 "+version);status.setTextColor(enabled||screen?ACCENT:MUTED);showRecent();}
-    private void showRecent(){content.removeAllViews();List<LifeDb.Event> xs=db.recentEvents(100);heading("RECENT EVIDENCE · LEGACY");if(xs.isEmpty()){empty("Nothing captured yet. Enable context access, then new useful notifications will appear here.");return;}for(LifeDb.Event x:xs){LinearLayout c=card();c.addView(text(blank(x.title)?friendlyApp(x.app):x.title,16,TEXT));TextView body=text(x.body,13,TEXT);body.setPadding(0,dp(6),0,0);c.addView(body);c.addView(meta(friendlyApp(x.app)+"  ·  "+formatTime(x.at)));content.addView(c,lp(dp(8)));}}
-    private void showCanonical(){content.removeAllViews();PersistentUnderstandingStore u=PersistentUnderstandingStore.get(this);List<CanonicalEventRecord> xs=u.recentCanonical(100);String version=u.canonicalEngineVersion();long rebuilt=u.canonicalRebuiltAt();heading("CANONICAL RECENT · SHADOW "+(blank(version)?UnderstandingEngineVersion.CURRENT:version));if(rebuilt>0)content.addView(meta("Rebuilt "+formatTime(rebuilt)+" · raw history preserved"));if(xs.isEmpty()){empty("No canonical events yet. This view is experimental and does not replace Recent.");return;}for(CanonicalEventRecord x:xs){LinearLayout c=card();c.addView(text(x.direction.name()+" · "+x.type,11,ACCENT));TextView body=text(x.text,14,TEXT);body.setPadding(0,dp(6),0,0);c.addView(body);c.addView(meta(x.sources+"  ·  confidence "+Math.round(x.confidence*100)+"%  ·  "+formatTime(x.observedAt)));content.addView(c,lp(dp(8)));}}
-    private void showLoops(){content.removeAllViews();List<LifeDb.Loop> xs=db.openLoops(100);heading("OPEN LOOPS");if(xs.isEmpty()){empty("No requests, commitments, or appointment-like messages need attention yet.");return;}for(LifeDb.Loop x:xs){LinearLayout c=card();TextView kind=text(x.kind.toUpperCase(),11,ACCENT);c.addView(kind);TextView title=text(x.title,15,TEXT);title.setPadding(0,dp(5),0,dp(8));c.addView(title);Button done=button("MARK DONE");done.setOnClickListener(v->{db.closeLoop(x.id);showLoops();});c.addView(done);content.addView(c,lp(dp(8)));}}
-    private void confirmErase(){new AlertDialog.Builder(this).setTitle("Erase LifeOS data?").setMessage("This permanently deletes legacy events, open loops, raw understanding evidence, and the canonical view stored by LifeOS on this phone.").setNegativeButton("Cancel",null).setPositiveButton("Erase",(d,w)->{db.eraseAll();PersistentUnderstandingStore.get(this).eraseAllUnderstanding();refresh();}).show();}
-    private void heading(String x){TextView v=text(x,12,MUTED);v.setPadding(0,dp(12),0,dp(8));content.addView(v);}
-    private void empty(String x){TextView v=text(x,14,MUTED);v.setPadding(dp(16),dp(28),dp(16),dp(28));content.addView(v);}
-    private LinearLayout card(){LinearLayout c=new LinearLayout(this);c.setOrientation(LinearLayout.VERTICAL);c.setPadding(dp(16),dp(14),dp(16),dp(14));c.setBackgroundColor(CARD);return c;}
-    private TextView meta(String x){TextView v=text(x,11,MUTED);v.setPadding(0,dp(8),0,0);return v;}
-    private Button button(String x){Button b=new Button(this);b.setText(x);b.setTextColor(TEXT);b.setTextSize(12);b.setAllCaps(false);b.setBackgroundColor(CARD);return b;}
-    private TextView text(String x,int size,int color){TextView v=new TextView(this);v.setText(x);v.setTextSize(size);v.setTextColor(color);v.setLineSpacing(0,1.08f);return v;}
-    private LinearLayout.LayoutParams lp(int top){LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,-2);p.setMargins(0,top,0,0);return p;}
-    private int dp(int n){return Math.round(n*getResources().getDisplayMetrics().density);}
-    private static String formatTime(long at){return DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(new Date(at));}
-    private static boolean blank(String x){return TextUtils.isEmpty(x)||x.trim().isEmpty();}
-    private static String friendlyApp(String p){if(p==null)return "Unknown";int i=p.lastIndexOf('.');String x=i>=0?p.substring(i+1):p;return x.isEmpty()?p:Character.toUpperCase(x.charAt(0))+x.substring(1);}
+    private LifeDb db;private LinearLayout content;
+    @Override public void onCreate(Bundle s){super.onCreate(s);db=new LifeDb(this);render();}
+    @Override protected void onResume(){super.onResume();refresh();}
+    @Override protected void onDestroy(){db.close();super.onDestroy();}
+    private void render(){LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(LifeOsUi.BG);root.addView(LifeOsUi.detailTopBar(this,"LifeOS status"));ScrollView sc=new ScrollView(this);sc.setVerticalScrollBarEnabled(false);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(LifeOsUi.dp(this,16),LifeOsUi.dp(this,8),LifeOsUi.dp(this,16),LifeOsUi.dp(this,24));sc.addView(content);root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));setContentView(root);}
+    private void refresh(){content.removeAllViews();String listeners=Settings.Secure.getString(getContentResolver(),"enabled_notification_listeners"),services=Settings.Secure.getString(getContentResolver(),Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);boolean notif=listeners!=null&&listeners.contains(getPackageName()),screen=services!=null&&services.contains(getPackageName());IntelligenceStatus.Snapshot s=IntelligenceStatus.snapshot(this);BackgroundModelManager.Status model=BackgroundModelManager.status(this);int raw=UniversalObservationStore.get(this).count(),mem=PersistentLifeMemoryStore.get(this).searchable().size();
+        LinearLayout hero=new LinearLayout(this);hero.setOrientation(LinearLayout.VERTICAL);hero.setGravity(Gravity.CENTER_HORIZONTAL);hero.addView(LifeOsUi.statusRing(this,s,64),new LinearLayout.LayoutParams(LifeOsUi.dp(this,76),LifeOsUi.dp(this,76)));TextView title=LifeOsUi.text(this,stateTitle(s,notif,screen),18f,LifeOsUi.TEXT);LifeOsUi.weight(title,700);title.setGravity(Gravity.CENTER);title.setPadding(0,LifeOsUi.dp(this,7),0,0);hero.addView(title);TextView sub=LifeOsUi.text(this,stateDescription(s,notif,screen),10.6f,LifeOsUi.MUTED);LifeOsUi.weight(sub,500);sub.setGravity(Gravity.CENTER);sub.setPadding(0,LifeOsUi.dp(this,3),0,LifeOsUi.dp(this,9));hero.addView(sub);content.addView(hero);
+        content.addView(LifeOsUi.section(this,"System health"));health("Capture",notif&&screen?"Active":notif||screen?"Partially active":"Needs access",notif&&screen);health("Background intelligence",model.ready()?"Ready":human(model.state)+(model.progress>0?" · "+model.progress+"%":""),model.ready());health("Memory",raw+" observations · "+mem+" durable memories · "+VoiceMemoryRepository.count(this)+" voice recordings",true);health("Processing",s.pending==0?"Everything ready":s.pending+" items processing",s.pending==0);health("Attention",ObligationRepository.count(this)+" canonical open items",true);
+        content.addView(LifeOsUi.section(this,"Access"));Button n=LifeOsUi.button(this,"Notification access");n.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS)));content.addView(n,new LinearLayout.LayoutParams(-1,LifeOsUi.dp(this,46)));Button a=LifeOsUi.button(this,"Screen context");a.setOnClickListener(v->startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));LinearLayout.LayoutParams ap=new LinearLayout.LayoutParams(-1,LifeOsUi.dp(this,46));ap.setMargins(0,LifeOsUi.dp(this,7),0,0);content.addView(a,ap);
+        content.addView(LifeOsUi.section(this,"Advanced"));Button ocr=LifeOsUi.button(this,"OCR quality lab");ocr.setOnClickListener(v->startActivity(new Intent(this,OcrLabActivity.class)));content.addView(ocr,new LinearLayout.LayoutParams(-1,LifeOsUi.dp(this,46)));Button audit=LifeOsUi.button(this,"Run experience audit");audit.setOnClickListener(v->startActivity(new Intent(this,ExperienceAuditActivity.class)));LinearLayout.LayoutParams xp=new LinearLayout.LayoutParams(-1,LifeOsUi.dp(this,46));xp.setMargins(0,LifeOsUi.dp(this,7),0,0);content.addView(audit,xp);Button erase=LifeOsUi.button(this,"Erase local LifeOS data");erase.setTextColor(LifeOsUi.RED);erase.setOnClickListener(v->confirmErase());LinearLayout.LayoutParams ep=new LinearLayout.LayoutParams(-1,LifeOsUi.dp(this,46));ep.setMargins(0,LifeOsUi.dp(this,7),0,0);content.addView(erase,ep);}
+    private void health(String title,String value,boolean ok){LinearLayout c=LifeOsUi.card(this);TextView t=LifeOsUi.text(this,title,12.5f,LifeOsUi.TEXT);LifeOsUi.weight(t,700);c.addView(t);TextView v=LifeOsUi.text(this,(ok?"● ":"○ ")+value,10.4f,ok?LifeOsUi.GREEN:LifeOsUi.AMBER);LifeOsUi.weight(v,500);v.setPadding(0,LifeOsUi.dp(this,4),0,0);c.addView(v);content.addView(c);}
+    private static String stateTitle(IntelligenceStatus.Snapshot s,boolean notif,boolean screen){if(!notif||!screen)return "LifeOS needs access";if("download_failed".equals(s.modelState)||"download_paused".equals(s.modelState)||"unavailable".equals(s.modelState))return "LifeOS needs attention";if(s.pending>0||s.backgroundRunning||"downloading".equals(s.modelState)||"verifying".equals(s.modelState))return "LifeOS is analyzing";return "LifeOS is ready";}
+    private static String stateDescription(IntelligenceStatus.Snapshot s,boolean notif,boolean screen){if(!notif||!screen)return "Enable the missing capture access so LifeOS can keep your context complete.";if("download_failed".equals(s.modelState)||"download_paused".equals(s.modelState)||"unavailable".equals(s.modelState))return "Background intelligence setup needs action; captured data remains safe.";if(s.pending>0||s.backgroundRunning)return "Grounded context is being processed in the background.";if("downloading".equals(s.modelState)||"verifying".equals(s.modelState))return "The background intelligence model is being prepared.";return "Nothing is waiting to be processed right now.";}
+    private static String human(String x){String v=x==null?"unknown":x.replace('_',' ').trim();return v.isEmpty()?"Unknown":Character.toUpperCase(v.charAt(0))+v.substring(1);}
+    private void confirmErase(){new AlertDialog.Builder(this).setTitle("Erase local LifeOS data?").setMessage("This removes captured evidence, memory, attention, saved voice recordings/transcripts, OCR test images and source locators stored by this install.").setNegativeButton("Cancel",null).setPositiveButton("Erase",(d,w)->{db.eraseAll();AttentionStore.get(this).eraseAll();NotificationMeaningStore.get(this).eraseAll();com.kareem.lifeos.engine.PersistentUnderstandingStore.get(this).eraseAllUnderstanding();UniversalObservationStore.get(this).eraseAll();PersistentLifeMemoryStore.get(this).eraseAll();SourceLocatorStore.get(this).eraseAll();VoiceMemoryRepository.eraseFilesAndStore(this);ImageOcrStore.get(this).eraseAll();refresh();}).show();}
 }

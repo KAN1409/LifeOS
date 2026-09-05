@@ -1,0 +1,33 @@
+package com.kareem.lifeos;
+
+import android.app.Activity;
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.Gravity;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import com.kareem.lifeos.actions.PersistentActionQueue;
+import com.kareem.lifeos.actions.TeyaApprovalReceiver;
+import java.text.DateFormat;
+import java.util.Date;
+import java.util.List;
+
+/** Approval surface in the same visual language as the rest of LifeOS. */
+public final class ActionCenterActivity extends Activity {
+    private PersistentActionQueue queue;private LinearLayout content;private Button pending,history;private boolean showingHistory;
+    @Override public void onCreate(Bundle s){super.onCreate(s);queue=new PersistentActionQueue(this);render();showPending();}
+    @Override protected void onResume(){super.onResume();if(content!=null){if(showingHistory)showHistory();else showPending();}}
+    private void render(){LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(LifeOsUi.BG);root.addView(LifeOsUi.detailTopBar(this,"Action center"));LinearLayout tabs=new LinearLayout(this);tabs.setPadding(LifeOsUi.dp(this,16),0,LifeOsUi.dp(this,16),LifeOsUi.dp(this,7));pending=LifeOsUi.chip(this,"Pending",true);history=LifeOsUi.chip(this,"History",false);tabs.addView(pending,new LinearLayout.LayoutParams(0,LifeOsUi.dp(this,36),1));LinearLayout.LayoutParams hp=new LinearLayout.LayoutParams(0,LifeOsUi.dp(this,36),1);hp.setMargins(LifeOsUi.dp(this,7),0,0,0);tabs.addView(history,hp);root.addView(tabs);ScrollView sc=new ScrollView(this);sc.setVerticalScrollBarEnabled(false);content=new LinearLayout(this);content.setOrientation(LinearLayout.VERTICAL);content.setPadding(LifeOsUi.dp(this,16),LifeOsUi.dp(this,4),LifeOsUi.dp(this,16),LifeOsUi.dp(this,24));sc.addView(content);root.addView(sc,new LinearLayout.LayoutParams(-1,0,1));pending.setOnClickListener(v->showPending());history.setOnClickListener(v->showHistory());setContentView(root);}
+    private void showPending(){showingHistory=false;select();content.removeAllViews();intro("Approval required","External or sensitive actions stay here until you explicitly approve them.");List<PersistentActionQueue.Item> xs=queue.pending();if(xs.isEmpty()){empty("No actions are waiting for approval.");return;}for(PersistentActionQueue.Item x:xs)card(x,true);}
+    private void showHistory(){showingHistory=true;select();content.removeAllViews();intro("Action history","A traceable record of proposals, approvals and outcomes.");List<PersistentActionQueue.Item> xs=queue.history();if(xs.isEmpty()){empty("No action history yet.");return;}for(PersistentActionQueue.Item x:xs)card(x,false);}
+    private void select(){pending.setBackground(LifeOsUi.round(this,showingHistory?LifeOsUi.SURFACE_2:LifeOsUi.BLUE,showingHistory?LifeOsUi.BORDER:LifeOsUi.BLUE,18));history.setBackground(LifeOsUi.round(this,showingHistory?LifeOsUi.BLUE:LifeOsUi.SURFACE_2,showingHistory?LifeOsUi.BLUE:LifeOsUi.BORDER,18));pending.setTextColor(showingHistory?LifeOsUi.TEXT:android.graphics.Color.WHITE);history.setTextColor(showingHistory?android.graphics.Color.WHITE:LifeOsUi.TEXT);}
+    private void intro(String title,String sub){TextView h=LifeOsUi.text(this,title,15.5f,LifeOsUi.TEXT);LifeOsUi.weight(h,700);content.addView(h);TextView s=LifeOsUi.text(this,sub,10.2f,LifeOsUi.MUTED);LifeOsUi.weight(s,500);s.setPadding(0,LifeOsUi.dp(this,3),0,LifeOsUi.dp(this,10));content.addView(s);}
+    private void card(PersistentActionQueue.Item x,boolean controls){LinearLayout c=LifeOsUi.card(this);TextView risk=LifeOsUi.badge(this,risk(x.proposal.risk.name()),riskColor(x.proposal.risk.name()));c.addView(risk);String title=human(x.proposal.actionType)+(x.proposal.target.isEmpty()?"":" · "+UserFacingText.humanize(x.proposal.target));TextView t=LifeOsUi.text(this,title,12.6f,LifeOsUi.TEXT);LifeOsUi.weight(t,700);t.setPadding(0,LifeOsUi.dp(this,6),0,0);c.addView(t);if(!x.proposal.payloadSummary.isEmpty()){TextView s=LifeOsUi.text(this,UserFacingText.humanize(x.proposal.payloadSummary),10.4f,LifeOsUi.MUTED);LifeOsUi.weight(s,500);s.setPadding(0,LifeOsUi.dp(this,3),0,0);c.addView(s);}TextView state=LifeOsUi.text(this,"Status · "+human(x.state)+(x.proposal.situationId.isEmpty()?"":" · linked situation"),9.6f,"failed".equals(x.state)?LifeOsUi.RED:LifeOsUi.GREEN);LifeOsUi.weight(state,600);state.setPadding(0,LifeOsUi.dp(this,5),0,0);c.addView(state);if(x.approval!=null){TextView ap=LifeOsUi.text(this,(x.approval.approved?"Approved":"Denied")+" · "+DateFormat.getDateTimeInstance(DateFormat.SHORT,DateFormat.SHORT).format(new Date(x.approval.approvedAt)),9.5f,LifeOsUi.MUTED);LifeOsUi.weight(ap,500);c.addView(ap);}if(!x.result.isEmpty()){TextView result=LifeOsUi.text(this,x.result,9.8f,"failed".equals(x.state)?LifeOsUi.RED:LifeOsUi.GREEN);LifeOsUi.weight(result,500);result.setPadding(0,LifeOsUi.dp(this,5),0,0);c.addView(result);}c.setOnClickListener(v->startActivity(new Intent(this,SuggestedActionDetailActivity.class).putExtra("proposal_id",x.proposal.proposalId)));if(controls){LinearLayout buttons=new LinearLayout(this);buttons.setPadding(0,LifeOsUi.dp(this,8),0,0);Button deny=LifeOsUi.button(this,"Dismiss");deny.setTextColor(LifeOsUi.RED);deny.setOnClickListener(v->{queue.decide(x.proposal.proposalId,false);showPending();});Button approve=LifeOsUi.primary(this,"Approve & execute");approve.setOnClickListener(v->{queue.decide(x.proposal.proposalId,true);TeyaApprovalReceiver.executeApproved(this,x);showHistory();});buttons.addView(deny,new LinearLayout.LayoutParams(0,LifeOsUi.dp(this,40),1));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,LifeOsUi.dp(this,40),1);p.setMargins(LifeOsUi.dp(this,7),0,0,0);buttons.addView(approve,p);c.addView(buttons);}content.addView(c);}
+    private void empty(String s){LinearLayout c=LifeOsUi.card(this);TextView t=LifeOsUi.text(this,s,10.8f,LifeOsUi.MUTED);LifeOsUi.weight(t,500);c.addView(t);content.addView(c);}
+    private static int riskColor(String value){if(value!=null&&(value.contains("IRREVERSIBLE")||value.contains("SENSITIVE")))return LifeOsUi.RED;return LifeOsUi.AMBER;}
+    private static String human(String value){String x=value==null?"":value.replace('_',' ').trim().toLowerCase();return x.isEmpty()?"Action":Character.toUpperCase(x.charAt(0))+x.substring(1);}
+    private static String risk(String value){if("READ_ONLY".equals(value))return "Review only";if("REVERSIBLE_WRITE".equals(value))return "Can be undone";if("IRREVERSIBLE_WRITE".equals(value))return "Cannot be undone";return "Sensitive action";}
+}
