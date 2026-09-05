@@ -20,7 +20,7 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-/** Locked LifeOS visual language reconstructed from the approved golden reference. */
+/** Locked LifeOS visual language: simple surface, deep connected capability layer. */
 final class LifeOsUi {
     static final float TEXT_SCALE=1.06f;
     static final int BG=Color.rgb(7,11,16),SURFACE=Color.rgb(18,25,33),SURFACE_2=Color.rgb(29,39,50),BORDER=Color.rgb(50,62,76);
@@ -42,6 +42,7 @@ final class LifeOsUi {
     static View divider(Context c){View v=new View(c);v.setBackgroundColor(BORDER);v.setLayoutParams(new LinearLayout.LayoutParams(-1,dp(c,1)));return v;}
 
     static LinearLayout topBar(Activity a,String title,boolean settings){LinearLayout h=new LinearLayout(a);h.setGravity(Gravity.CENTER_VERTICAL);h.setPadding(dp(a,16),dp(a,8),dp(a,10),dp(a,7));h.setBackgroundColor(BG);TextView t=text(a,title,21.2f,TEXT);weight(t,700);h.addView(t,new LinearLayout.LayoutParams(0,-2,1));if(settings){View gear=iconTouch(a,LifeOsIconView.MORE,TEXT,22,42);gear.setContentDescription("Settings and diagnostics");gear.setOnClickListener(v->a.startActivity(new Intent(a,MainActivity.class)));h.addView(gear,new LinearLayout.LayoutParams(dp(a,42),dp(a,42)));}return h;}
+    static LinearLayout detailTopBar(Activity a,String title){LinearLayout h=new LinearLayout(a);h.setGravity(Gravity.CENTER_VERTICAL);h.setPadding(dp(a,6),dp(a,7),dp(a,12),dp(a,6));h.setBackgroundColor(BG);View back=iconTouch(a,LifeOsIconView.CHEVRON,TEXT,18,42);if(back instanceof FrameLayout&&((FrameLayout)back).getChildCount()>0)((FrameLayout)back).getChildAt(0).setRotation(180f);back.setContentDescription("Back");back.setOnClickListener(v->a.finish());h.addView(back,new LinearLayout.LayoutParams(dp(a,42),dp(a,42)));TextView t=text(a,title,18.5f,TEXT);weight(t,700);t.setMaxLines(1);h.addView(t,new LinearLayout.LayoutParams(0,-2,1));return h;}
     static Button iconButton(Context c,String glyph){Button b=button(c,glyph);b.setTextSize(refSp(17));b.setPadding(0,0,0,0);b.setBackgroundColor(Color.TRANSPARENT);return b;}
     static TextView avatar(Context c,String initial){TextView v=text(c,initial,12.5f,TEXT);weight(v,500);v.setGravity(Gravity.CENTER);v.setBackground(round(c,SURFACE_2,BORDER,100));return v;}
 
@@ -53,6 +54,8 @@ final class LifeOsUi {
 
     static View appIcon(Context c,String packageName,int size){try{Drawable d=c.getPackageManager().getApplicationIcon(packageName);ImageView v=new ImageView(c);v.setImageDrawable(d);v.setScaleType(ImageView.ScaleType.FIT_CENTER);v.setPadding(dp(c,1),dp(c,1),dp(c,1),dp(c,1));v.setLayoutParams(new LinearLayout.LayoutParams(dp(c,size),dp(c,size)));return v;}catch(Throwable ignored){return iconTile(c,LifeOsIconView.ACTIVITY,BLUE,size);}}
     static int withAlpha(int color,int alpha){return Color.argb(alpha,Color.red(color),Color.green(color),Color.blue(color));}
+
+    static View statusRing(Context c,IntelligenceStatus.Snapshot s,int size){int color=BLUE;String state="Idle · Ready when you are";if(s!=null){if("download_failed".equals(s.modelState)||"download_paused".equals(s.modelState)||"unavailable".equals(s.modelState)){color=AMBER;state="Needs attention · Intelligence setup requires action";}else if(s.pending>0||s.backgroundRunning||"downloading".equals(s.modelState)||"verifying".equals(s.modelState)){color=PURPLE;state="Analyzing · Processing in the background";}}LifeOsIconView v=new LifeOsIconView(c,LifeOsIconView.LIFE,color);v.setContentDescription(state);v.setLayoutParams(new LinearLayout.LayoutParams(dp(c,size),dp(c,size)));return v;}
 
     static View orb(Context c){return new View(c){final Paint ring=new Paint(Paint.ANTI_ALIAS_FLAG);final Paint glow=new Paint(Paint.ANTI_ALIAS_FLAG);{setLayerType(View.LAYER_TYPE_SOFTWARE,null);} @Override protected void onDraw(Canvas canvas){super.onDraw(canvas);float cx=getWidth()/2f,cy=getHeight()/2f;float r=Math.min(getWidth(),getHeight())*.36f;int[] colors={BLUE,BLUE,Color.rgb(88,118,255),PURPLE,BLUE};float[] pos={0f,.45f,.70f,.86f,1f};SweepGradient shader=new SweepGradient(cx,cy,colors,pos);Matrix matrix=new Matrix();matrix.setRotate(88f,cx,cy);shader.setLocalMatrix(matrix);glow.setStyle(Paint.Style.STROKE);glow.setStrokeWidth(dp(getContext(),5));glow.setShader(shader);glow.setMaskFilter(new BlurMaskFilter(dp(getContext(),13),BlurMaskFilter.Blur.NORMAL));glow.setAlpha(155);canvas.drawCircle(cx,cy,r,glow);glow.setMaskFilter(null);ring.setStyle(Paint.Style.STROKE);ring.setStrokeCap(Paint.Cap.ROUND);ring.setStrokeWidth(dp(getContext(),3));ring.setShader(shader);ring.setAlpha(255);canvas.drawCircle(cx,cy,r,ring);}};}
 

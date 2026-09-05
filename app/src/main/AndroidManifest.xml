@@ -34,6 +34,9 @@
         <activity android:name=".TimelineActivity" android:exported="false" />
         <activity android:name=".SearchActivity" android:exported="false" />
         <activity android:name=".AskLifeOsActivity" android:exported="false" />
+        <activity android:name=".CapabilityActivity" android:exported="false" />
+        <activity android:name=".EntityDetailActivity" android:exported="false" />
+        <activity android:name=".SystemStatusActivity" android:exported="false" />
         <activity android:name=".ExperienceAuditActivity" android:exported="false" android:label="LifeOS Audit" />
         <activity android:name=".FeedSectionActivity" android:exported="false" />
         <activity android:name=".EvidenceDetailActivity" android:exported="false" />
