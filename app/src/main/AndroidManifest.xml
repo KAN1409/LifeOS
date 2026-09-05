@@ -39,6 +39,8 @@
         <activity android:name=".EntityDetailActivity" android:exported="false" />
         <activity android:name=".SystemStatusActivity" android:exported="false" />
         <activity android:name=".ExperienceAuditActivity" android:exported="false" android:label="LifeOS Audit" />
+        <activity android:name=".OcrLabActivity" android:exported="false" android:label="LifeOS OCR Lab" />
+        <activity android:name=".ImageOcrDetailActivity" android:exported="false" />
         <activity android:name=".FeedSectionActivity" android:exported="false" />
         <activity android:name=".EvidenceDetailActivity" android:exported="false" />
         <activity android:name=".ConversationDetailActivity" android:exported="false" />
