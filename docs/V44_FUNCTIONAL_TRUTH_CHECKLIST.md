@@ -171,10 +171,44 @@ This checklist verifies **real backing capabilities**, not screen presence. A ca
 
 These unchecked items are **not failures hidden behind UI**. The primary product is required to state the narrower capability it actually has rather than imply these deeper layers already exist.
 
-## O. Automated safety gates
+## O. Experimental OCR quality gate — NOT yet a normal Images capability
+- [x] Add `V44_OCR_QUALITY_ARCHITECTURE.md` with an explicit promotion contract.
+- [x] Add durable `ImageOcrStore`; source image metadata survives OCR failure and OCR engine replacement.
+- [x] Add stable `image:<id>` objects for explicitly selected images.
+- [x] Persist image URI/name/MIME/dimensions/source independently from OCR text.
+- [x] Persist each OCR run separately with engine/status/raw text/search text/language/confidence/duration.
+- [x] Raw OCR text is immutable per run; search normalization is a separate derived representation.
+- [x] Add EXIF orientation handling and bounded image decoding.
+- [x] Add multi-pass preprocessing: original / small-text upscale / grayscale-contrast / Otsu threshold.
+- [x] Add multi-pass ML Kit Latin OCR with candidate scoring and selected-line bounding boxes.
+- [x] Add multi-pass Arabic OCR using Tesseract `tessdata_best` Arabic model rather than Cortex's old fast single pass.
+- [x] Add candidate agreement/consensus scoring instead of trusting one OCR pass.
+- [x] Add separate critical-token extraction for amounts, dates, times, phone numbers, URLs and email addresses.
+- [x] Critical numeric tokens are never silently corrected into a different value.
+- [x] Add Arabic-aware search normalization without modifying displayed raw OCR.
+- [x] Add ground-truth/correction store; user correction does not overwrite raw OCR.
+- [x] Add CER/WER benchmark implementation.
+- [x] Add `OCR quality lab` device UI for import → scan → inspect candidates → correct ground truth → measure.
+- [x] Keep Images/OCR out of `FunctionalCapabilityRegistry`, normal Search and normal Ask until the quality gate passes.
+- [ ] Collect at least 30 real ground-truth samples.
+- [ ] Corpus includes representative Arabic-only screenshots/documents.
+- [ ] Corpus includes representative mixed Arabic/English screenshots/documents.
+- [ ] Aggregate CER ≤ 8% on the accepted validation corpus.
+- [ ] Aggregate WER ≤ 18% on the accepted validation corpus.
+- [ ] Separately review critical amount/date/phone-number errors before promotion.
+- [ ] Implement an authorized secure cloud OCR gateway; no long-lived provider key in the Android APK.
+- [ ] Benchmark Google document OCR vs Azure Read on the same ground-truth corpus if recovery/cloud OCR is required.
+- [ ] Choose local/cloud routing policy from measured accuracy/latency evidence, not vendor preference.
+- [ ] Only after passing the gate: register `Images` as an operational LifeOS capability.
+- [ ] Only after passing the gate: federate OCR text into normal Search and Ask grounding.
+- [ ] Only after passing the gate: expose Image in normal Quick Capture.
+- [ ] Device proof: Arabic OCR quality substantially exceeds the old Cortex OCR on the benchmark corpus.
+
+## P. Automated safety gates
 - [x] Add `CanonicalSemanticPolicyTest` for reaction/information/request/provisional/promotion cases.
-- [ ] Android unit tests pass in CI.
-- [ ] Release APK assembles in CI.
+- [x] Add `OcrQualityTest` for Arabic normalization, critical tokens, digit equivalence and duplicate-line fusion.
+- [ ] Android unit tests pass in CI on the final v44 head.
+- [ ] Release APK assembles in CI on the final v44 head.
 - [ ] CI artifact downloaded and inspected.
 - [ ] Permanent signer applied.
 - [ ] APK Signature Scheme v2 verified.
@@ -184,7 +218,7 @@ These unchecked items are **not failures hidden behind UI**. The primary product
 - [ ] Final APK SHA-256 recorded.
 - [ ] PR remains draft/open/unmerged.
 
-## P. Device acceptance
+## Q. Device acceptance
 - [ ] Install directly over v43 without uninstall.
 - [ ] Now screenshot verified.
 - [ ] Timeline screenshot verified.
@@ -199,6 +233,9 @@ These unchecked items are **not failures hidden behind UI**. The primary product
 - [ ] Open one Contact-backed Person and exercise Dial/Message path.
 - [ ] Open one Calendar-backed Event and exercise Open in Calendar.
 - [ ] Verify all visible counts agree across surfaces.
+- [ ] Open OCR quality lab and import at least one Arabic-heavy image.
+- [ ] Verify original image remains available when OCR fails or is re-run.
+- [ ] Save exact ground truth and verify per-image CER/WER is calculated.
 
 ## Functional DONE definition
 
@@ -206,4 +243,4 @@ A checked capability must pass:
 
 `real source -> durable typed object -> canonical ID -> list/count -> detail reload -> evidence/source -> supported action -> refreshed state`
 
-A beautiful screen, passing navigation, model-generated description, string match, or guessed count is never sufficient.
+A beautiful screen, passing navigation, model-generated description, string match, guessed count, or unbenchmarked OCR demo is never sufficient.
