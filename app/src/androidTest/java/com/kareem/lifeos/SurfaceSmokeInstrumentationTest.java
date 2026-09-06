@@ -4,20 +4,25 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
-import android.test.InstrumentationTestCase;
+import androidx.test.ext.junit.runners.AndroidJUnit4;
+import androidx.test.platform.app.InstrumentationRegistry;
+import org.junit.Before;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import static org.junit.Assert.*;
 
 /** Clean-device smoke test: every core surface must construct, resume and render without crashing. */
-public final class SurfaceSmokeInstrumentationTest extends InstrumentationTestCase {
+@RunWith(AndroidJUnit4.class)
+public final class SurfaceSmokeInstrumentationTest {
     private Instrumentation instrumentation;
     private Context target;
 
-    @Override protected void setUp() throws Exception {
-        super.setUp();
-        instrumentation=getInstrumentation();
+    @Before public void setUp() {
+        instrumentation=InstrumentationRegistry.getInstrumentation();
         target=instrumentation.getTargetContext();
     }
 
-    public void testCoreSurfacesLaunch() throws Exception {
+    @Test public void coreSurfacesLaunch() throws Exception {
         launch(new Intent(target,FeedActivity.class));
         launch(new Intent(target,TimelineActivity.class));
         launch(new Intent(target,SearchActivity.class));
@@ -35,12 +40,12 @@ public final class SurfaceSmokeInstrumentationTest extends InstrumentationTestCa
         launch(new Intent(target,FeedSectionActivity.class).putExtra("mode","activity"));
     }
 
-    public void testEveryFunctionalCapabilitySurfaceLaunches() throws Exception {
+    @Test public void everyFunctionalCapabilitySurfaceLaunches() throws Exception {
         for(String id:new String[]{"conversations","commitments","decisions","voice","files","projects","places","people","events"})
             launch(new Intent(target,CapabilityActivity.class).putExtra("capability",id));
     }
 
-    public void testRuntimeQaHasNoHardFailureOnCleanInstall() {
+    @Test public void runtimeQaHasNoHardFailureOnCleanInstall() {
         FullQaHarness.Report report=FullQaHarness.run(target);
         assertEquals("FullQaHarness has a hard failure on a clean emulator: "+report.json.toString(),0,report.fail);
     }
