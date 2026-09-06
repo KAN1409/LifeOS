@@ -63,7 +63,8 @@ jobs:
           sdkmanager "platform-tools" "emulator" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
       - name: Create clean API 35 AVD
         run: |
-          echo no | avdmanager create avd --force --name lifeos_api35 --package "system-images;android-35;google_apis;x86_64" --device "pixel_6"
+          echo no | avdmanager create avd --force --name lifeos_api35 --package "system-images;android-35;google_apis;x86_64"
+          test -f "$HOME/.android/avd/lifeos_api35.avd/config.ini"
           printf '%s\n' \
             'hw.keyboard=yes' \
             'hw.gpu.enabled=yes' \
@@ -73,7 +74,7 @@ jobs:
         run: |
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm || true; fi
           nohup emulator -avd lifeos_api35 -no-window -no-audio -no-boot-anim -camera-back none -camera-front none -gpu swiftshader_indirect > "$RUNNER_TEMP/lifeos-emulator.log" 2>&1 &
-          adb wait-for-device
+          timeout 180 adb wait-for-device
           timeout 420 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
           adb shell input keyevent 82 || true
           adb shell settings put global window_animation_scale 0 || true
@@ -85,8 +86,8 @@ jobs:
         if: always()
         run: |
           mkdir -p app/build/emulator-diagnostics
-          adb shell getprop > app/build/emulator-diagnostics/getprop.txt 2>/dev/null || true
-          adb logcat -d > app/build/emulator-diagnostics/logcat.txt 2>/dev/null || true
+          timeout 10 adb shell getprop > app/build/emulator-diagnostics/getprop.txt 2>/dev/null || true
+          timeout 10 adb logcat -d > app/build/emulator-diagnostics/logcat.txt 2>/dev/null || true
           cp "$RUNNER_TEMP/lifeos-emulator.log" app/build/emulator-diagnostics/emulator.log 2>/dev/null || true
       - name: Upload instrumentation results
         if: always()
