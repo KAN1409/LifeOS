@@ -45,16 +45,16 @@ This pass is a semantic-trust pass. UI presence is not evidence that an obligati
 - [ ] Device proof: every open commitment detail has narrow evidence that actually supports that exact obligation.
 
 ## F. Release gates
-- [ ] Android unit tests pass on final v45 head.
-- [ ] Release APK assembles in CI.
-- [ ] Artifact downloaded and inspected.
-- [ ] Permanent signer applied.
-- [ ] APK Signature Scheme v2 verified.
-- [ ] APK Signature Scheme v3 verified.
-- [ ] Native libraries verified for 16KB alignment.
-- [ ] `com.kareem.lifeos` and versionCode 45 confirmed as in-place update over v44.
-- [ ] Final APK SHA-256 recorded.
-- [ ] PR remains draft/open/unmerged.
+- [x] Android unit tests pass on final v45 head.
+- [x] Release APK assembles in CI.
+- [x] Artifact downloaded and inspected.
+- [x] Permanent signer applied.
+- [x] APK Signature Scheme v2 verified.
+- [x] APK Signature Scheme v3 verified.
+- [x] Native libraries verified for 16KB alignment (35/35).
+- [x] `com.kareem.lifeos` and versionCode 45 confirmed as in-place update over v44.
+- [x] Final APK SHA-256 recorded: `67f124e9060d9bafc2b38a85b4ec26e06b1e0dbae723b6389e07cfdfdc0851af`.
+- [x] PR remains draft/open/unmerged.
 
 ## G. Device acceptance
 - [ ] Install v45 directly over v44; no uninstall/data reset.
