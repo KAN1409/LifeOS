@@ -108,7 +108,7 @@ public final class ExperienceAudit {
     private static JSONObject runtimeSnapshot(Activity a){
         JSONObject j=new JSONObject();
         try{
-            LifeDb db=new LifeDb(a);j.put("package",a.getPackageName());j.put("version_name",a.getPackageManager().getPackageInfo(a.getPackageName(),0).versionName);j.put("version_code",a.getPackageManager().getPackageInfo(a.getPackageName(),0).getLongVersionCode());
+            LifeDb db=new LifeDb(a);android.content.pm.PackageInfo packageInfo=a.getPackageManager().getPackageInfo(a.getPackageName(),0);j.put("package",a.getPackageName());j.put("version_name",packageInfo.versionName);j.put("version_code",packageInfo.versionCode);
             UniversalObservationStore observationStore=UniversalObservationStore.get(a);
             List<RawObservation> rawSample=observationStore.recent(2000);int notificationFacts=0;Set<String> notificationStreams=new HashSet<>();JSONObject captureByApp=new JSONObject();
             for(RawObservation o:rawSample){if(o!=null&&o.sourceKind==RawObservation.SourceKind.NOTIFICATION){notificationFacts++;if(o.streamId!=null&&!o.streamId.trim().isEmpty())notificationStreams.add(o.streamId);String app=o.sourcePackage==null?"unknown":o.sourcePackage;captureByApp.put(app,captureByApp.optInt(app,0)+1);}}
