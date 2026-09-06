@@ -63,7 +63,10 @@ jobs:
           sdkmanager "platform-tools" "emulator" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
       - name: Create clean API 35 AVD
         run: |
-          echo no | avdmanager create avd --force --name lifeos_api35 --package "system-images;android-35;google_apis;x86_64"
+          DEVICE_ID="$(avdmanager list device -c | sed '/^[[:space:]]*$/d' | head -n 1)"
+          test -n "$DEVICE_ID"
+          echo "Using AVD hardware profile: $DEVICE_ID"
+          avdmanager create avd --force --name lifeos_api35 --package "system-images;android-35;google_apis;x86_64" --device "$DEVICE_ID"
           test -f "$HOME/.android/avd/lifeos_api35.avd/config.ini"
           printf '%s\n' \
             'hw.keyboard=yes' \
