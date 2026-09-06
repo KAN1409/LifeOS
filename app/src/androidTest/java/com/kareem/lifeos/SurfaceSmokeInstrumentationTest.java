@@ -4,8 +4,15 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
+import android.os.Handler;
+import android.os.Looper;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.TextView;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -48,6 +55,30 @@ public final class SurfaceSmokeInstrumentationTest {
     @Test public void runtimeQaHasNoHardFailureOnCleanInstall() {
         FullQaHarness.Report report=FullQaHarness.run(target);
         assertEquals("FullQaHarness has a hard failure on a clean emulator: "+report.json.toString(),0,report.fail);
+    }
+
+    @Test public void fullQaButtonDoesNotBlockAndroidMainThread() throws Exception {
+        Intent intent=new Intent(target,ExperienceAuditActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        Activity activity=instrumentation.startActivitySync(intent);
+        instrumentation.waitForIdleSync();
+        View run=findText(activity.getWindow().getDecorView(),"Run full LifeOS test");
+        assertNotNull("Full QA run button missing",run);
+
+        CountDownLatch pulse=new CountDownLatch(1);
+        activity.runOnUiThread(()->{
+            run.performClick();
+            new Handler(Looper.getMainLooper()).post(pulse::countDown);
+        });
+        assertTrue("Full QA click blocked the Android main thread",pulse.await(750,TimeUnit.MILLISECONDS));
+
+        activity.runOnUiThread(activity::finish);
+        instrumentation.waitForIdleSync();
+    }
+
+    private static View findText(View v,String wanted){
+        if(v instanceof TextView&&wanted.contentEquals(((TextView)v).getText()))return v;
+        if(v instanceof ViewGroup){ViewGroup g=(ViewGroup)v;for(int i=0;i<g.getChildCount();i++){View found=findText(g.getChildAt(i),wanted);if(found!=null)return found;}}
+        return null;
     }
 
     private void launch(Intent intent) throws Exception {
