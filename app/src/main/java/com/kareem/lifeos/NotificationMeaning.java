@@ -2,7 +2,7 @@ package com.kareem.lifeos;
 
 import org.json.JSONObject;
 
-/** Compact, grounded meaning of one notification stream/conversation. */
+/** Compact, grounded meaning of one exact notification evidence item. */
 final class NotificationMeaning {
     static final double SUMMARY_CONFIDENCE=.62;
     static final double ATTENTION_CONFIDENCE=.78;
@@ -13,16 +13,28 @@ final class NotificationMeaning {
     static final String[] ACTIONS={"REPLY","DO_TASK","VERIFY","PAY","REVIEW","CALL_BACK","NONE"};
 
     final String streamId,sourceObservationId,type,intent,state,urgency,action,summary,reason,model;
+    /** Verbatim substring from the TARGET evidence that proves the semantic claim. */
+    final String evidenceSpan;
+    /** Exact prior observation id explicitly resolved by this target, or empty. */
+    final String resolvesObservationId;
     final double confidence;
     final long understoodAt;
 
+    /** Compatibility constructor for deterministic/local callers that do not create canonical person attention. */
     NotificationMeaning(String streamId,String sourceObservationId,String type,String intent,String state,
                         String urgency,String action,String summary,String reason,double confidence,
                         String model,long understoodAt){
+        this(streamId,sourceObservationId,type,intent,state,urgency,action,summary,reason,"","",confidence,model,understoodAt);
+    }
+
+    NotificationMeaning(String streamId,String sourceObservationId,String type,String intent,String state,
+                        String urgency,String action,String summary,String reason,String evidenceSpan,
+                        String resolvesObservationId,double confidence,String model,long understoodAt){
         this.streamId=safe(streamId);this.sourceObservationId=safe(sourceObservationId);
         this.type=allowed(type,TYPES,"OTHER");this.intent=allowed(intent,INTENTS,"NONE");
         this.state=allowed(state,STATES,"UNKNOWN");this.urgency=allowed(urgency,URGENCIES,"NONE");
         this.action=allowed(action,ACTIONS,"NONE");this.summary=clip(safe(summary),220);this.reason=clip(safe(reason),260);
+        this.evidenceSpan=clip(safe(evidenceSpan).trim(),260);this.resolvesObservationId=clip(safe(resolvesObservationId).trim(),220);
         this.confidence=Math.max(0,Math.min(1,confidence));this.model=safe(model);this.understoodAt=understoodAt;
     }
 
@@ -34,10 +46,6 @@ final class NotificationMeaning {
         return ("SECURITY_ALERT".equals(type)||"FINANCIAL_ALERT".equals(type))&&("HIGH".equals(urgency)||"MEDIUM".equals(urgency))&&!"NONE".equals(action);
     }
 
-    /**
-     * Model-grounded non-person states use a brain_* namespace so legacy keyword validation cannot
-     * silently erase a high-confidence state that was recognized from a novel app/source.
-     */
     String loopKind(){
         if("SECURITY_ALERT".equals(type))return "brain_security";
         if("FINANCIAL_ALERT".equals(type))return "brain_financial";
@@ -53,19 +61,13 @@ final class NotificationMeaning {
         return "request";
     }
 
-    int priority(){
-        if("HIGH".equals(urgency))return 92;
-        if("MEDIUM".equals(urgency))return 74;
-        return 58;
-    }
+    int priority(){if("HIGH".equals(urgency))return 92;if("MEDIUM".equals(urgency))return 74;return 58;}
 
     static NotificationMeaning fromModel(JSONObject o,String streamId,String sourceObservationId,String model,long now){
-        if(o==null)return null;
-        String summary=o.optString("summary","").trim();
-        if(summary.isEmpty())return null;
+        if(o==null)return null;String summary=o.optString("summary","").trim();if(summary.isEmpty())return null;
         return new NotificationMeaning(streamId,sourceObservationId,o.optString("type"),o.optString("intent"),
-                o.optString("state"),o.optString("urgency"),o.optString("action"),summary,
-                o.optString("reason"),o.optDouble("confidence",0),model,now);
+                o.optString("state"),o.optString("urgency"),o.optString("action"),summary,o.optString("reason"),
+                o.optString("evidence_span",""),o.optString("resolves_observation_id",""),o.optDouble("confidence",0),model,now);
     }
 
     private static String allowed(String value,String[] allowed,String fallback){String x=safe(value).trim().toUpperCase();for(String a:allowed)if(a.equals(x))return x;return fallback;}
