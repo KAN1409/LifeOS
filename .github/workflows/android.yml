@@ -44,7 +44,6 @@ jobs:
 
   emulator-smoke:
     name: Android 35 clean-emulator smoke
-    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
