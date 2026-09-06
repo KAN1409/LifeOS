@@ -7,8 +7,8 @@ android {
         applicationId 'com.kareem.lifeos'
         minSdk 26
         targetSdk 35
-        versionCode 44
-        versionName '0.13.0-functional-truth-pass'
+        versionCode 45
+        versionName '0.14.0-obligation-truth-lifecycle-pass'
         testInstrumentationRunner 'android.test.InstrumentationTestRunner'
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
