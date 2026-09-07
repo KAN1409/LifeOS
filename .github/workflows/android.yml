@@ -54,7 +54,7 @@ jobs:
   emulator-matrix:
     name: Android API ${{ matrix.api }} exhaustive device QA
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -252,6 +252,39 @@ jobs:
           if grep -E -A 16 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos|Fatal signal' "$LOG" | grep -q 'com\.kareem\.lifeos'; then
             echo 'LifeOS crash/ANR signature found in emulator logcat'
             grep -E -A 16 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos|Fatal signal' "$LOG" | grep -B 2 -A 12 'com\.kareem\.lifeos' || true
+            exit 1
+          fi
+
+      - name: Check out v46 update baseline
+        if: ${{ matrix.api == 35 }}
+        uses: actions/checkout@v4
+        with:
+          ref: c533ca86ed62d77abbce38a7ad2db142e8e49339
+          path: baseline-v46
+
+      - name: Verify v46 to v48 Android package update preserves private data
+        if: ${{ matrix.api == 35 }}
+        run: |
+          gradle -p baseline-v46 :app:assembleDebug
+          BASELINE="baseline-v46/app/build/outputs/apk/debug/app-debug.apk"
+          CURRENT="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$BASELINE"
+          test -f "$CURRENT"
+          adb uninstall com.kareem.lifeos >/dev/null 2>&1 || true
+          adb install "$BASELINE"
+          adb shell dumpsys package com.kareem.lifeos | grep -q 'versionCode=46'
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity >/dev/null
+          adb shell run-as com.kareem.lifeos sh -c 'mkdir -p files; echo V46_TO_V48 > files/qa_update_marker'
+          test "$(adb shell run-as com.kareem.lifeos cat files/qa_update_marker | tr -d '\r')" = 'V46_TO_V48'
+          adb install -r "$CURRENT"
+          adb shell dumpsys package com.kareem.lifeos | grep -q 'versionCode=48'
+          test "$(adb shell run-as com.kareem.lifeos cat files/qa_update_marker | tr -d '\r')" = 'V46_TO_V48'
+          adb logcat -c
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity | tee "$RUNNER_TEMP/update-launch.txt"
+          sleep 2
+          adb shell pidof com.kareem.lifeos
+          if adb logcat -d -v brief | grep -E -A 12 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos' | grep -q 'com\.kareem\.lifeos'; then
+            echo 'LifeOS failed after v46 -> v48 package update'
             exit 1
           fi
 
