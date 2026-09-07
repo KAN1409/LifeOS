@@ -18,13 +18,14 @@ public final class PerformanceBudgetInstrumentationTest {
     @Test public void coreProviderInventoryCompletesWithinLargeHistoryBudget(){
         assumeTrue(Build.VERSION.SDK_INT>=35);Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();
         try(LifeDb db=new LifeDb(c)){
-            SQLiteDatabase sql=db.getWritableDatabase();sql.beginTransaction();try{
-                long now=System.currentTimeMillis()-600000;
-                for(int i=0;i<5000;i++){ContentValues v=new ContentValues();v.put("source_key","qa-perf-"+i);v.put("app","com.whatsapp");v.put("title","QA Contact "+(i%120));v.put("body","ordinary captured message "+i);v.put("thread_key","com.whatsapp|qa-perf-"+(i%120));v.put("captured_at",now+i);v.put("updated_at",now+i);sql.insertWithOnConflict("events",null,v,SQLiteDatabase.CONFLICT_IGNORE);}sql.setTransactionSuccessful();
-            } finally {sql.endTransaction();}
-            long start=SystemClock.elapsedRealtime();FunctionalCapabilityRegistry.all(c);long elapsed=SystemClock.elapsedRealtime()-start;
-            assertTrue("Provider inventory took "+elapsed+" ms on a 5k-event history; move counts/indexing off reconstructive O(N) paths",elapsed<10000);
-            sql.delete("events","source_key LIKE 'qa-perf-%'",null);
+            SQLiteDatabase sql=db.getWritableDatabase();try{
+                sql.beginTransaction();try{
+                    long now=System.currentTimeMillis()-600000;
+                    for(int i=0;i<5000;i++){ContentValues v=new ContentValues();v.put("source_key","qa-perf-"+i);v.put("app","com.whatsapp");v.put("title","QA Contact "+(i%120));v.put("body","ordinary captured message "+i);v.put("thread_key","com.whatsapp|qa-perf-"+(i%120));v.put("captured_at",now+i);v.put("updated_at",now+i);sql.insertWithOnConflict("events",null,v,SQLiteDatabase.CONFLICT_IGNORE);}sql.setTransactionSuccessful();
+                } finally {sql.endTransaction();}
+                long start=SystemClock.elapsedRealtime();FunctionalCapabilityRegistry.all(c);long elapsed=SystemClock.elapsedRealtime()-start;
+                assertTrue("Provider inventory took "+elapsed+" ms on a 5k-event history; move counts/indexing off reconstructive O(N) paths",elapsed<10000);
+            } finally {sql.delete("events","source_key LIKE 'qa-perf-%'",null);}
         }
     }
 
