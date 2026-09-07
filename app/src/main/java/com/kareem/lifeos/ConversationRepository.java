@@ -31,11 +31,11 @@ final class ConversationRepository {
         return out;
     }
 
-    static int count(Context context){return list(context,1000).size();}
+    static int count(Context context){return all(context).size();}
 
     static ConversationObject load(Context context,String objectId){
         String id=safe(objectId);if(id.isEmpty())return null;
-        for(ConversationObject c:list(context,1200))if(c.id.equals(id))return c;
+        for(ConversationObject c:all(context))if(c.id.equals(id))return c;
         return null;
     }
 
@@ -47,6 +47,15 @@ final class ConversationRepository {
     static String idFor(String app,String threadKey,String label){
         String raw=safe(app)+"\n"+safe(threadKey)+"\n"+safe(label).toLowerCase(Locale.ROOT);
         return "conversation:"+sha(raw).substring(0,24);
+    }
+
+    private static List<ConversationObject> all(Context context){
+        ArrayList<ConversationObject> out=new ArrayList<>();
+        try(LifeDb db=new LifeDb(context)){
+            long events=Math.max(1,db.count("events"));int max=(int)Math.min(1000000L,Math.min(events,Integer.MAX_VALUE/32L));
+            for(LifeDb.Conversation c:db.recentConversations(Math.max(1,max)))out.add(from(c));
+        }
+        return out;
     }
 
     private static ConversationObject from(LifeDb.Conversation c){
