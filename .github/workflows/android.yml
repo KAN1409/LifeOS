@@ -4,8 +4,10 @@ on:
     branches: [ main ]
   pull_request:
   workflow_dispatch:
+
 jobs:
   build:
+    name: Build, unit, lint and static architecture QA
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -18,10 +20,12 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Static security and architecture QA
-        run: python3 scripts/qa_static.py
+        run: |
+          python3 scripts/qa_static.py
+          python3 scripts/qa_exhaustive.py
       - name: Unit tests — debug and release
         run: gradle :app:testDebugUnitTest :app:testReleaseUnitTest
-      - name: Compile instrumentation smoke suite
+      - name: Compile exhaustive instrumentation suite
         run: gradle :app:assembleDebugAndroidTest
       - name: Android lint
         run: gradle :app:lintDebug
@@ -35,6 +39,7 @@ jobs:
           path: |
             app/build/reports/
             app/build/test-results/
+            app/build/qa/
           if-no-files-found: ignore
       - name: Upload unsigned release APK
         uses: actions/upload-artifact@v4
@@ -42,10 +47,14 @@ jobs:
           name: LifeOS-V2-release-unsigned-apk
           path: app/build/outputs/apk/release/app-release-unsigned.apk
 
-  emulator-smoke:
-    name: Android 35 clean-emulator smoke
+  emulator-matrix:
+    name: Android API ${{ matrix.api }} exhaustive device QA
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 30, 33, 35, 36]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v5
@@ -56,31 +65,38 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+
       - name: Install emulator image
         run: |
           CMDLINE_BIN="$ANDROID_SDK_ROOT/cmdline-tools/16.0/bin"
           test -x "$CMDLINE_BIN/sdkmanager"
           yes | "$CMDLINE_BIN/sdkmanager" --licenses >/dev/null || true
-          "$CMDLINE_BIN/sdkmanager" "platform-tools" "emulator" "platforms;android-35" "system-images;android-35;google_apis;x86_64"
-          test -f "$ANDROID_SDK_ROOT/system-images/android-35/google_apis/x86_64/system.img"
-      - name: Create clean API 35 AVD
+          "$CMDLINE_BIN/sdkmanager" \
+            "platform-tools" \
+            "emulator" \
+            "platforms;android-${{ matrix.api }}" \
+            "system-images;android-${{ matrix.api }};google_apis;x86_64"
+          test -f "$ANDROID_SDK_ROOT/system-images/android-${{ matrix.api }}/google_apis/x86_64/system.img"
+
+      - name: Create clean AVD
         run: |
+          NAME="lifeos_api${{ matrix.api }}"
           AVD_ROOT="$HOME/.android/avd"
-          AVD_DIR="$AVD_ROOT/lifeos_api35.avd"
+          AVD_DIR="$AVD_ROOT/$NAME.avd"
           mkdir -p "$AVD_DIR"
-          cat > "$AVD_ROOT/lifeos_api35.ini" <<EOF
+          cat > "$AVD_ROOT/$NAME.ini" <<EOF
           avd.ini.encoding=UTF-8
           path=$AVD_DIR
-          path.rel=avd/lifeos_api35.avd
-          target=android-35
+          path.rel=avd/$NAME.avd
+          target=android-${{ matrix.api }}
           EOF
-          cat > "$AVD_DIR/config.ini" <<'EOF'
-          AvdId=lifeos_api35
+          cat > "$AVD_DIR/config.ini" <<EOF
+          AvdId=$NAME
           PlayStore.enabled=false
           abi.type=x86_64
-          avd.ini.displayname=LifeOS API 35
+          avd.ini.displayname=LifeOS API ${{ matrix.api }}
           avd.ini.encoding=UTF-8
-          disk.dataPartition.size=2048M
+          disk.dataPartition.size=3072M
           fastboot.forceColdBoot=yes
           fastboot.forceFastBoot=no
           hw.accelerometer=yes
@@ -102,26 +118,30 @@ jobs:
           hw.lcd.height=2400
           hw.lcd.width=1080
           hw.mainKeys=no
-          hw.ramSize=2048
+          hw.ramSize=3072
           hw.sdCard=no
           hw.sensors.orientation=yes
           hw.sensors.proximity=yes
-          image.sysdir.1=system-images/android-35/google_apis/x86_64/
+          image.sysdir.1=system-images/android-${{ matrix.api }}/google_apis/x86_64/
           runtime.network.latency=none
           runtime.network.speed=full
           showDeviceFrame=no
           skin.dynamic=yes
           tag.display=Google APIs
           tag.id=google_apis
-          vm.heapSize=256
+          vm.heapSize=384
           EOF
-          test -f "$AVD_DIR/config.ini"
           "$ANDROID_SDK_ROOT/emulator/emulator" -list-avds | tee "$RUNNER_TEMP/lifeos-avds.txt"
-          grep -qx 'lifeos_api35' "$RUNNER_TEMP/lifeos-avds.txt"
+          grep -qx "$NAME" "$RUNNER_TEMP/lifeos-avds.txt"
+
       - name: Boot clean emulator
         run: |
+          NAME="lifeos_api${{ matrix.api }}"
           if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm || true; fi
-          nohup "$ANDROID_SDK_ROOT/emulator/emulator" -avd lifeos_api35 -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -camera-back none -camera-front none -gpu swiftshader_indirect > "$RUNNER_TEMP/lifeos-emulator.log" 2>&1 &
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" \
+            -avd "$NAME" -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
+            -camera-back none -camera-front none -gpu swiftshader_indirect \
+            > "$RUNNER_TEMP/lifeos-emulator.log" 2>&1 &
           timeout 180 adb wait-for-device
           timeout 420 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
           adb shell input keyevent 82 || true
@@ -129,23 +149,58 @@ jobs:
           adb shell settings put global transition_animation_scale 0 || true
           adb shell settings put global animator_duration_scale 0 || true
           adb shell getprop ro.build.version.sdk
-      - name: Run LifeOS instrumentation smoke suite
+          adb shell getprop ro.build.version.release
+          adb logcat -c || true
+
+      - name: Run exhaustive LifeOS instrumentation suite
         run: gradle :app:connectedDebugAndroidTest --stacktrace
+
+      - name: Cold and warm startup performance probes
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          mkdir -p app/build/emulator-diagnostics/api-${{ matrix.api }}
+          adb shell am force-stop com.kareem.lifeos || true
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity > app/build/emulator-diagnostics/api-${{ matrix.api }}/cold-start.txt
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity > app/build/emulator-diagnostics/api-${{ matrix.api }}/warm-start.txt
+          adb shell dumpsys meminfo com.kareem.lifeos > app/build/emulator-diagnostics/api-${{ matrix.api }}/meminfo.txt || true
+          adb shell dumpsys gfxinfo com.kareem.lifeos > app/build/emulator-diagnostics/api-${{ matrix.api }}/gfxinfo.txt || true
+          adb shell dumpsys package com.kareem.lifeos > app/build/emulator-diagnostics/api-${{ matrix.api }}/package.txt || true
+
+      - name: Package-restricted Monkey exploration
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          adb shell monkey -p com.kareem.lifeos --pct-syskeys 0 --pct-anyevent 0 --throttle 35 -s 424242 1200 \
+            > "$RUNNER_TEMP/lifeos-monkey.txt" 2>&1
+
       - name: Collect emulator diagnostics
         if: always()
         run: |
-          mkdir -p app/build/emulator-diagnostics
-          cp "$RUNNER_TEMP/lifeos-avds.txt" app/build/emulator-diagnostics/avds.txt 2>/dev/null || true
-          timeout 10 adb shell getprop > app/build/emulator-diagnostics/getprop.txt 2>/dev/null || true
-          timeout 10 adb logcat -d > app/build/emulator-diagnostics/logcat.txt 2>/dev/null || true
-          cp "$RUNNER_TEMP/lifeos-emulator.log" app/build/emulator-diagnostics/emulator.log 2>/dev/null || true
-      - name: Upload instrumentation results
+          OUT="app/build/emulator-diagnostics/api-${{ matrix.api }}"
+          mkdir -p "$OUT"
+          cp "$RUNNER_TEMP/lifeos-avds.txt" "$OUT/avds.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/lifeos-emulator.log" "$OUT/emulator.log" 2>/dev/null || true
+          cp "$RUNNER_TEMP/lifeos-monkey.txt" "$OUT/monkey.txt" 2>/dev/null || true
+          timeout 10 adb shell getprop > "$OUT/getprop.txt" 2>/dev/null || true
+          timeout 15 adb logcat -d -v threadtime > "$OUT/logcat.txt" 2>/dev/null || true
+          timeout 10 adb shell dumpsys activity processes > "$OUT/processes.txt" 2>/dev/null || true
+
+      - name: Fail on LifeOS crash or ANR found during exploration
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          LOG="app/build/emulator-diagnostics/api-${{ matrix.api }}/logcat.txt"
+          if grep -E -A 16 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos|Fatal signal' "$LOG" | grep -q 'com\.kareem\.lifeos'; then
+            echo 'LifeOS crash/ANR signature found in emulator logcat'
+            grep -E -A 16 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos|Fatal signal' "$LOG" | grep -B 2 -A 12 'com\.kareem\.lifeos' || true
+            exit 1
+          fi
+
+      - name: Upload API-specific instrumentation results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: LifeOS-emulator-smoke-results
+          name: LifeOS-emulator-api-${{ matrix.api }}-results
           path: |
             app/build/reports/androidTests/
             app/build/outputs/androidTest-results/
-            app/build/emulator-diagnostics/
+            app/build/emulator-diagnostics/api-${{ matrix.api }}/
           if-no-files-found: ignore
