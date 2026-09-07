@@ -19,9 +19,9 @@ final class ObligationRepository {
 
     static List<ObligationObject> open(Context context,int limit){
         AttentionStore store=AttentionStore.get(context);NotificationMeaningStore meanings=NotificationMeaningStore.get(context);LinkedHashMap<String,Mutable> grouped=new LinkedHashMap<>();
-        boolean queuedLegacy=false;
+        boolean queuedLegacy=false;int scan=Math.max(1,store.openCount());
         try(LifeDb db=new LifeDb(context)){
-            for(AttentionStore.Item item:store.openItems(500)){
+            for(AttentionStore.Item item:store.openItems(scan)){
                 LifeDb.Event event=db.eventById(item.eventId);if(event==null){store.retract(item.eventId,"Source evidence is no longer available");continue;}
                 EventSemantics.Assessment assessment=EventSemantics.classify(event);NotificationMeaning meaning=meanings.forObservation(item.sourceObservationId);
                 if(!CanonicalSemanticPolicy.isCanonicalAttention(item,event,meaning)){
@@ -45,8 +45,8 @@ final class ObligationRepository {
         out.sort((a,b)->{int p=Integer.compare(b.priority,a.priority);return p!=0?p:Long.compare(b.latestAt,a.latestAt);});if(out.size()>Math.max(1,limit))return new ArrayList<>(out.subList(0,Math.max(1,limit)));return out;
     }
 
-    static int count(Context c){return open(c,1000).size();}
-    static ObligationObject load(Context c,String id){for(ObligationObject o:open(c,1000))if(o.id.equals(s(id)))return o;return null;}
+    static int count(Context c){int scan=Math.max(1,AttentionStore.get(c).openCount());return open(c,scan).size();}
+    static ObligationObject load(Context c,String id){int scan=Math.max(1,AttentionStore.get(c).openCount());for(ObligationObject o:open(c,scan))if(o.id.equals(s(id)))return o;return null;}
     static void markHandled(Context c,String id){ObligationObject o=load(c,id);if(o==null)return;AttentionStore store=AttentionStore.get(c);for(Long eventId:o.evidenceEventIds)if(eventId!=null&&eventId>0)store.markHandled(eventId);}
     static String idFor(String key){return "obligation:"+sha(s(key)).substring(0,24);}
     private static String sha(String value){try{byte[] b=MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8));StringBuilder x=new StringBuilder();for(byte q:b)x.append(String.format(Locale.US,"%02x",q));return x.toString();}catch(Exception e){return Integer.toHexString(value.hashCode())+"000000000000000000000000";}}
