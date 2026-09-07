@@ -5,13 +5,14 @@ import android.content.Context;
 import android.database.sqlite.SQLiteDatabase;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import com.kareem.lifeos.context.UniversalObservationStore;
 import java.util.List;
 import java.util.UUID;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Large-data tests catch hidden UI/search/reload caps that are invisible on an empty emulator. */
+/** Large-data tests catch hidden UI/search/reload/retention caps that are invisible on an empty emulator. */
 @RunWith(AndroidJUnit4.class)
 public final class ScalabilityInstrumentationTest {
     @Test public void decisionsCountAndSearchRemainCorrectPastOneThousand(){
@@ -35,5 +36,16 @@ public final class ScalabilityInstrumentationTest {
         } finally {sql.endTransaction();}
         assertNotNull("Direct project repository lost the old object",ProjectRepository.load(c,oldId));
         assertNotNull("Functional object reload silently caps lookup to the newest 3000 rows",FunctionalCapabilityRegistry.load(c,"projects",oldId));
+    }
+
+    @Test public void rawEvidenceReadDoesNotSilentlyStopAtTwoThousand(){
+        Context c=InstrumentationRegistry.getInstrumentation().getTargetContext();UniversalObservationStore store=UniversalObservationStore.get(c);SQLiteDatabase sql=store.getWritableDatabase();String token=UUID.randomUUID().toString().substring(0,8),prefix="qa-raw-"+token+"-";long base=System.currentTimeMillis()+10000;
+        try{
+            sql.beginTransaction();try{
+                for(int i=0;i<2505;i++){ContentValues v=new ContentValues();v.put("observation_id",prefix+i);v.put("source_kind","OTHER");v.put("source_package","qa.exhaustive");v.put("stream_id","qa:"+token);v.put("event_type","QA_RAW");v.put("observed_at",base+i);v.put("text","raw evidence "+i);v.put("raw_payload","{}");v.put("attributes_json","{}");sql.insertOrThrow("observations",null,v);}sql.setTransactionSuccessful();
+            } finally {sql.endTransaction();}
+            assertEquals("UniversalObservationStore.recent silently capped an explicit 2505-row request",2505,store.recent(2505).size());
+            assertNotNull("Oldest raw evidence row disappeared while reading a >2000 corpus",store.byObservationId(prefix+0));
+        } finally {sql.delete("observations","observation_id LIKE ?",new String[]{prefix+"%"});}
     }
 }
