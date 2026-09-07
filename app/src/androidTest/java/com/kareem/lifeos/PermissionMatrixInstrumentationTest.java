@@ -9,16 +9,17 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
+import androidx.test.uiautomator.UiDevice;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import static org.junit.Assert.*;
 
-/** Tests the app in both denied and granted runtime-permission states without relying on UI dialogs. */
+/** Tests denied/granted/revoked runtime-permission states across the full minSdk matrix. */
 @RunWith(AndroidJUnit4.class)
 public final class PermissionMatrixInstrumentationTest {
-    private Instrumentation instrumentation; private Context target;
-    @Before public void setup(){instrumentation=InstrumentationRegistry.getInstrumentation();target=instrumentation.getTargetContext();}
+    private Instrumentation instrumentation; private Context target; private UiDevice device;
+    @Before public void setup(){instrumentation=InstrumentationRegistry.getInstrumentation();target=instrumentation.getTargetContext();device=UiDevice.getInstance(instrumentation);}
 
     @Test public void contactsProviderSurvivesGrantAndRevoke() throws Exception {
         revoke(Manifest.permission.READ_CONTACTS);
@@ -72,6 +73,14 @@ public final class PermissionMatrixInstrumentationTest {
         Activity a=instrumentation.startActivitySync(intent);assertNotNull(a);instrumentation.waitForIdleSync();assertFalse(a.isFinishing());
         a.runOnUiThread(a::finish);instrumentation.waitForIdleSync();
     }
-    private void grant(String p){try{instrumentation.getUiAutomation().grantRuntimePermission(target.getPackageName(),p);}catch(SecurityException ignored){}}
-    private void revoke(String p){try{instrumentation.getUiAutomation().revokeRuntimePermission(target.getPackageName(),p);}catch(SecurityException ignored){}}
+
+    /** UiAutomation grant/revoke methods are not binary-compatible with API 26; shell pm is stable across minSdk 26+. */
+    private void grant(String permission)throws Exception{
+        device.executeShellCommand("pm grant "+target.getPackageName()+" "+permission);
+        instrumentation.waitForIdleSync();
+    }
+    private void revoke(String permission)throws Exception{
+        device.executeShellCommand("pm revoke "+target.getPackageName()+" "+permission);
+        instrumentation.waitForIdleSync();
+    }
 }
