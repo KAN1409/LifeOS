@@ -48,6 +48,30 @@ public final class UserJourneyInstrumentationTest {
         } finally {finish(a);}
     }
 
+    @Test public void projectCompleteAndReopenLifecycleWorksThroughVisibleDetailActions() throws Exception {
+        ProjectRepository.ProjectObject p=ProjectRepository.create(c,"QA Project Lifecycle "+UUID.randomUUID().toString().substring(0,8),"visible lifecycle journey");assertNotNull(p);Activity a=null;try{
+            a=launch(new Intent(c,FunctionalObjectDetailActivity.class).putExtra("capability_id","projects").putExtra("object_id",p.id));
+            UiObject2 complete=device.wait(Until.findObject(By.text("Mark completed")),1500);assertNotNull("Project detail has no Mark completed action",complete);complete.click();
+            assertTrue("Project detail did not rerender completed state",device.wait(Until.hasObject(By.text("Reopen")),2000));assertEquals("completed",ProjectRepository.load(c,p.id).status);
+            UiObject2 reopen=device.findObject(By.text("Reopen"));assertNotNull(reopen);reopen.click();
+            assertTrue("Project detail did not rerender active state",device.wait(Until.hasObject(By.text("Mark completed")),2000));assertEquals("active",ProjectRepository.load(c,p.id).status);
+        } finally {finish(a);}
+    }
+
+    @Test public void groundedCommitmentCanBeMarkedHandledThroughVisibleDetailAction() throws Exception {
+        String suffix=UUID.randomUUID().toString().substring(0,8),stream="com.whatsapp|qa-ui-obligation-"+suffix,obs="qa-ui-obs-"+suffix,body="Can you send the QA contract?";long now=System.currentTimeMillis(),event;
+        try(LifeDb db=new LifeDb(c)){event=db.upsertEvent("qa-ui-obligation-"+suffix,"com.whatsapp","QA Person "+suffix,body,stream,now);}
+        NotificationMeaning meaning=new NotificationMeaning(stream,obs,"PERSON_CONVERSATION","QUESTION","WAITING_ON_USER","MEDIUM","REPLY","Send the QA contract","Direct question",body,"",.97,"qa-user-journey",now);
+        NotificationMeaningStore.get(c).put(meaning,now);AttentionStore.get(c).applyModel(meaning,event,now);
+        ObligationRepository.ObligationObject obligation=null;for(ObligationRepository.ObligationObject o:ObligationRepository.open(c,2000))if(o.latestEventId==event){obligation=o;break;}assertNotNull("Grounded fixture never became a canonical commitment",obligation);
+        Activity a=null;try{
+            a=launch(new Intent(c,FunctionalObjectDetailActivity.class).putExtra("capability_id","commitments").putExtra("object_id",obligation.id));
+            UiObject2 handled=device.wait(Until.findObject(By.text("Mark handled")),1500);assertNotNull("Commitment detail has no Mark handled action",handled);handled.click();ins.waitForIdleSync();
+            assertEquals("Visible Mark handled action did not update durable attention state",AttentionStore.HANDLED,AttentionStore.get(c).forEvent(event).status);
+            assertNull("Handled commitment remained in canonical open projection",ObligationRepository.load(c,obligation.id));
+        } finally {finish(a);}
+    }
+
     @Test public void filePickerActionActuallyOpensAndroidDocumentUi() throws Exception {
         Activity a=null;try{
             a=launch(new Intent(c,CapabilityActivity.class).putExtra("capability","files"));
