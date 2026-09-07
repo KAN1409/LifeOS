@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
-import android.content.IntentFilter;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
@@ -32,24 +31,35 @@ public final class UserJourneyInstrumentationTest {
 
     @Test public void searchFieldShowsARealProviderObject() throws Exception {
         String name="QA Search Project "+UUID.randomUUID().toString().substring(0,8);ProjectRepository.ProjectObject p=ProjectRepository.create(c,name,"user journey");assertNotNull(p);
-        Activity a=launch(new Intent(c,SearchActivity.class).putExtra("initial_query",name).putExtra("initial_filter","projects"));
-        assertTrue("Search UI did not render a real project result",device.wait(Until.hasObject(By.text(name)),2500));finish(a);
+        Activity a=null;try{
+            a=launch(new Intent(c,SearchActivity.class).putExtra("initial_query",name).putExtra("initial_filter","projects"));
+            assertTrue("Search UI did not render a real project result",device.wait(Until.hasObject(By.text(name)),2500));
+        } finally {finish(a);}
     }
 
     @Test public void projectCanBeCreatedThroughTheVisibleUi() throws Exception {
-        String name="QA UI Project "+UUID.randomUUID().toString().substring(0,8);Activity a=launch(new Intent(c,CapabilityActivity.class).putExtra("capability","projects"));
-        UiObject2 create=device.wait(Until.findObject(By.text("Create project")),2000);assertNotNull("Create project action missing",create);create.click();
-        assertTrue("Project creation dialog did not appear",device.wait(Until.hasObject(By.text("Create project")),1500));
-        List<UiObject2> edits=device.findObjects(By.clazz("android.widget.EditText"));assertTrue("Project dialog inputs missing",edits.size()>=2);edits.get(0).setText(name);edits.get(1).setText("Created by exhaustive user-journey QA");
-        UiObject2 confirm=device.findObject(By.text("Create"));assertNotNull("Project dialog Create button missing",confirm);confirm.click();
-        assertTrue("Created project did not appear in Browse",device.wait(Until.hasObject(By.text(name)),2500));assertNotNull(ProjectRepository.load(c,findProject(name).id));finish(a);
+        String name="QA UI Project "+UUID.randomUUID().toString().substring(0,8);Activity a=null;try{
+            a=launch(new Intent(c,CapabilityActivity.class).putExtra("capability","projects"));
+            UiObject2 create=device.wait(Until.findObject(By.text("Create project")),2000);assertNotNull("Create project action missing",create);create.click();
+            assertTrue("Project creation dialog did not appear",device.wait(Until.hasObject(By.text("Create project")),1500));
+            List<UiObject2> edits=device.findObjects(By.clazz("android.widget.EditText"));assertTrue("Project dialog inputs missing",edits.size()>=2);edits.get(0).setText(name);edits.get(1).setText("Created by exhaustive user-journey QA");
+            UiObject2 confirm=device.findObject(By.text("Create"));assertNotNull("Project dialog Create button missing",confirm);confirm.click();
+            assertTrue("Created project did not appear in Browse",device.wait(Until.hasObject(By.text(name)),2500));ProjectRepository.ProjectObject created=findProject(name);assertNotNull(created);assertNotNull(ProjectRepository.load(c,created.id));
+        } finally {finish(a);}
     }
 
-    @Test public void filePickerActionActuallyDispatchesAndroidOpenDocument() throws Exception {
-        Activity a=launch(new Intent(c,CapabilityActivity.class).putExtra("capability","files"));
-        IntentFilter f=new IntentFilter(Intent.ACTION_OPEN_DOCUMENT);Instrumentation.ActivityMonitor monitor=ins.addMonitor(f,new Instrumentation.ActivityResult(Activity.RESULT_CANCELED,null),true);
-        UiObject2 button=device.wait(Until.findObject(By.text("Connect a file")),1500);assertNotNull(button);button.click();ins.waitForIdleSync();
-        assertTrue("Connect a file did not issue ACTION_OPEN_DOCUMENT",monitor.getHits()>0);ins.removeMonitor(monitor);finish(a);
+    @Test public void filePickerActionActuallyOpensAndroidDocumentUi() throws Exception {
+        Activity a=null;try{
+            a=launch(new Intent(c,CapabilityActivity.class).putExtra("capability","files"));
+            UiObject2 button=device.wait(Until.findObject(By.text("Connect a file")),1500);assertNotNull(button);button.click();
+            String current=waitForExternalPackage(3500);
+            assertNotNull("Connect a file did not leave LifeOS for Android's document UI",current);
+            assertNotEquals("Connect a file stayed inside LifeOS instead of opening ACTION_OPEN_DOCUMENT",c.getPackageName(),current);
+            device.pressBack();device.waitForIdle();
+        } finally {
+            String current=device.getCurrentPackageName();if(current!=null&&!c.getPackageName().equals(current))device.pressBack();
+            finish(a);
+        }
     }
 
     @Test public void voiceAndDecisionProviderActionsOpenTheirRealScreens() throws Exception {
@@ -59,17 +69,24 @@ public final class UserJourneyInstrumentationTest {
 
     @Test public void detailBackControlReturnsWithoutCrash() throws Exception {
         ProjectRepository.ProjectObject p=ProjectRepository.create(c,"QA Back "+UUID.randomUUID().toString().substring(0,8),"");assertNotNull(p);
-        Activity a=launch(new Intent(c,FunctionalObjectDetailActivity.class).putExtra("capability_id","projects").putExtra("object_id",p.id));
-        UiObject2 back=device.wait(Until.findObject(By.desc("Back")),1500);assertNotNull("Detail Back control has no accessible description",back);back.click();ins.waitForIdleSync();assertTrue(a.isFinishing()||a.isDestroyed());
+        Activity a=null;try{
+            a=launch(new Intent(c,FunctionalObjectDetailActivity.class).putExtra("capability_id","projects").putExtra("object_id",p.id));
+            UiObject2 back=device.wait(Until.findObject(By.desc("Back")),1500);assertNotNull("Detail Back control has no accessible description",back);back.click();ins.waitForIdleSync();assertTrue(a.isFinishing()||a.isDestroyed());
+        } finally {finish(a);}
     }
 
     private void assertNav(String label,Class<? extends Activity> target)throws Exception{
-        Activity feed=launch(new Intent(c,FeedActivity.class));Instrumentation.ActivityMonitor m=ins.addMonitor(target.getName(),null,false);UiObject2 nav=device.wait(Until.findObject(By.text(label)),1500);assertNotNull("Missing bottom-nav item "+label,nav);nav.click();Activity opened=ins.waitForMonitorWithTimeout(m,2500);assertNotNull(label+" did not open "+target.getSimpleName(),opened);ins.removeMonitor(m);finish(opened);finish(feed);
+        Activity feed=null,opened=null;Instrumentation.ActivityMonitor m=null;try{
+            feed=launch(new Intent(c,FeedActivity.class));m=ins.addMonitor(target.getName(),null,false);UiObject2 nav=device.wait(Until.findObject(By.text(label)),1500);assertNotNull("Missing bottom-nav item "+label,nav);nav.click();opened=ins.waitForMonitorWithTimeout(m,2500);assertNotNull(label+" did not open "+target.getSimpleName(),opened);
+        } finally {if(m!=null)ins.removeMonitor(m);finish(opened);finish(feed);}
     }
     private void assertCapabilityAction(String cap,String label,Class<? extends Activity> target)throws Exception{
-        Activity list=launch(new Intent(c,CapabilityActivity.class).putExtra("capability",cap));Instrumentation.ActivityMonitor m=ins.addMonitor(target.getName(),null,false);UiObject2 b=device.wait(Until.findObject(By.text(label)),1500);assertNotNull("Missing action "+label,b);b.click();Activity opened=ins.waitForMonitorWithTimeout(m,2500);assertNotNull(label+" did not open "+target.getSimpleName(),opened);ins.removeMonitor(m);finish(opened);finish(list);
+        Activity list=null,opened=null;Instrumentation.ActivityMonitor m=null;try{
+            list=launch(new Intent(c,CapabilityActivity.class).putExtra("capability",cap));m=ins.addMonitor(target.getName(),null,false);UiObject2 b=device.wait(Until.findObject(By.text(label)),1500);assertNotNull("Missing action "+label,b);b.click();opened=ins.waitForMonitorWithTimeout(m,2500);assertNotNull(label+" did not open "+target.getSimpleName(),opened);
+        } finally {if(m!=null)ins.removeMonitor(m);finish(opened);finish(list);}
     }
+    private String waitForExternalPackage(long timeoutMs)throws Exception{long end=System.currentTimeMillis()+timeoutMs;String pkg;do{pkg=device.getCurrentPackageName();if(pkg!=null&&!c.getPackageName().equals(pkg))return pkg;Thread.sleep(100);}while(System.currentTimeMillis()<end);return device.getCurrentPackageName();}
     private ProjectRepository.ProjectObject findProject(String name){for(ProjectRepository.ProjectObject p:ProjectRepository.list(c,5000))if(name.equals(p.name))return p;return null;}
     private Activity launch(Intent i){i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|Intent.FLAG_ACTIVITY_CLEAR_TASK);Activity a=ins.startActivitySync(i);assertNotNull(a);ins.waitForIdleSync();return a;}
-    private void finish(Activity a){if(a==null)return;if(!a.isFinishing())a.runOnUiThread(a::finish);ins.waitForIdleSync();}
+    private void finish(Activity a){if(a==null)return;try{if(!a.isFinishing())a.runOnUiThread(a::finish);ins.waitForIdleSync();}catch(Throwable ignored){}}
 }
