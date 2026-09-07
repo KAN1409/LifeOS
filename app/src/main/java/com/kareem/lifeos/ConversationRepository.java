@@ -45,9 +45,10 @@ final class ConversationRepository {
         try(LifeDb db=new LifeDb(context)){return db.eventsForThread(c.app,c.threadKey,c.label,Math.max(1,limit));}
     }
 
+    /** A real source thread is the identity. Display labels are mutable presentation and must never change a stable ID. */
     static String idFor(String app,String threadKey,String label){
-        String raw=safe(app)+"\n"+safe(threadKey)+"\n"+safe(label).toLowerCase(Locale.ROOT);
-        return "conversation:"+sha(raw).substring(0,24);
+        String a=safe(app),thread=safe(threadKey),identity=!thread.isEmpty()?"thread\n"+thread:"label\n"+safe(label).toLowerCase(Locale.ROOT);
+        return "conversation:"+sha(a+"\n"+identity).substring(0,24);
     }
 
     /**
