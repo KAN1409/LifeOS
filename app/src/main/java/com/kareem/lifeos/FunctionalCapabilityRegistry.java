@@ -52,7 +52,7 @@ final class FunctionalCapabilityRegistry {
         else if("events".equals(id)&&CalendarEventRepository.availability(c)==CalendarEventRepository.Availability.OPERATIONAL){for(CalendarEventRepository.CalendarEventObject x:CalendarEventRepository.recentAndUpcoming(c,limit)){String summary=!x.location.isEmpty()?x.location:x.description;String meta=new SimpleDateFormat("EEE, d MMM · HH:mm",Locale.getDefault()).format(new Date(x.begin));out.add(new ObjectItem(id,x.id,x.title.isEmpty()?"Calendar event":x.title,summary,meta,0));}}
         return out;
     }
-    static ObjectItem load(Context c,String capabilityId,String objectId){for(ObjectItem x:list(c,capabilityId,3000))if(x.objectId.equals(s(objectId)))return x;return null;}
+    static ObjectItem load(Context c,String capabilityId,String objectId){Capability cap=find(c,capabilityId);int scan=cap==null?3000:Math.max(1,cap.count);for(ObjectItem x:list(c,capabilityId,scan))if(x.objectId.equals(s(objectId)))return x;return null;}
     static int pendingActionCount(Context c){return new PersistentActionQueue(c).pending().size();}
 
     private static String humanAction(String a){String x=s(a).replace('_',' ').toLowerCase(Locale.ROOT);if(x.isEmpty()||"none".equals(x))return "Needs attention";return Character.toUpperCase(x.charAt(0))+x.substring(1);}
