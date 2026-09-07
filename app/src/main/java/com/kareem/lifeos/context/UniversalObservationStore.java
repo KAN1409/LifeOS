@@ -15,7 +15,6 @@ import org.json.JSONObject;
 public final class UniversalObservationStore extends SQLiteOpenHelper {
     private static final String DB_NAME = "lifeos_context_v2.db";
     private static final int DB_VERSION = 1;
-    private static final int MAX_ROWS = 20000;
     private static volatile UniversalObservationStore instance;
 
     private UniversalObservationStore(Context context) {
@@ -64,12 +63,13 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
         v.put("attributes_json", attributesJson(o.attributes));
         long id = getWritableDatabase().insertWithOnConflict(
                 "observations", null, v, SQLiteDatabase.CONFLICT_IGNORE);
-        if (id > 0) trim();
+        // Raw observations are evidence. Never silently evict them because a row-count threshold was crossed.
+        // Future storage management must be an explicit, user-visible archival/retention policy.
         return id > 0;
     }
 
     public synchronized List<RawObservation> recent(int limit) {
-        int safe = Math.max(1, Math.min(2000, limit));
+        int safe = Math.max(1, limit);
         List<RawObservation> out = new ArrayList<RawObservation>();
         Cursor c = getReadableDatabase().query("observations", columns(),
                 null,null,null,null,"observed_at DESC,id DESC",Integer.toString(safe));
@@ -125,10 +125,6 @@ public final class UniversalObservationStore extends SQLiteOpenHelper {
     }
 
     public synchronized void eraseAll() { getWritableDatabase().delete("observations", null, null); }
-
-    private void trim() {
-        getWritableDatabase().execSQL("DELETE FROM observations WHERE id NOT IN (SELECT id FROM observations ORDER BY id DESC LIMIT " + MAX_ROWS + ")");
-    }
 
     private static String[] columns(){return new String[]{"observation_id","source_kind","source_package","stream_id","event_type","observed_at","text","raw_payload","attributes_json"};}
     private static RawObservation read(Cursor c){
