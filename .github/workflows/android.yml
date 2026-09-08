@@ -159,6 +159,25 @@ jobs:
       - name: Run exhaustive LifeOS instrumentation suite
         run: gradle :app:connectedDebugAndroidTest --stacktrace
 
+      - name: Verify recovery after real runtime-permission revocation
+        run: |
+          PKG="com.kareem.lifeos"
+          OUT="$RUNNER_TEMP/permission-revoked.txt"
+          adb shell pm revoke "$PKG" android.permission.READ_CONTACTS || true
+          adb shell pm revoke "$PKG" android.permission.READ_CALENDAR || true
+          adb shell pm revoke "$PKG" android.permission.ACCESS_FINE_LOCATION || true
+          adb shell pm revoke "$PKG" android.permission.ACCESS_COARSE_LOCATION || true
+          adb shell pm revoke "$PKG" android.permission.RECORD_AUDIO || true
+          if [ "${{ matrix.api }}" -ge 33 ]; then
+            adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS || true
+          fi
+          sleep 2
+          adb shell am instrument -w \
+            -e class 'com.kareem.lifeos.PermissionRevokedStateInstrumentationTest#providersAndSurfacesRecoverAfterExternalPermissionRevocation' \
+            -e permissionPhase revoked \
+            com.kareem.lifeos.test/androidx.test.runner.AndroidJUnitRunner | tee "$OUT"
+          grep -q 'OK (1 test)' "$OUT"
+
       - name: Verify real Android notification-listener ingress
         if: ${{ matrix.api == 35 || matrix.api == 36 }}
         run: |
@@ -212,6 +231,7 @@ jobs:
         if: ${{ matrix.api == 35 || matrix.api == 36 }}
         run: |
           mkdir -p app/build/emulator-diagnostics/api-${{ matrix.api }}
+          cp "$RUNNER_TEMP/permission-revoked.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/permission-revoked.txt 2>/dev/null || true
           cp "$RUNNER_TEMP/notification-ingress.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/notification-ingress.txt 2>/dev/null || true
           cp "$RUNNER_TEMP/accessibility-ingress.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/accessibility-ingress.txt 2>/dev/null || true
           cp "$RUNNER_TEMP/process-death-seed.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/process-death-seed.txt 2>/dev/null || true
@@ -237,6 +257,7 @@ jobs:
           cp "$RUNNER_TEMP/lifeos-avds.txt" "$OUT/avds.txt" 2>/dev/null || true
           cp "$RUNNER_TEMP/lifeos-emulator.log" "$OUT/emulator.log" 2>/dev/null || true
           cp "$RUNNER_TEMP/lifeos-monkey.txt" "$OUT/monkey.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/permission-revoked.txt" "$OUT/permission-revoked.txt" 2>/dev/null || true
           cp "$RUNNER_TEMP/notification-ingress.txt" "$OUT/notification-ingress.txt" 2>/dev/null || true
           cp "$RUNNER_TEMP/accessibility-ingress.txt" "$OUT/accessibility-ingress.txt" 2>/dev/null || true
           cp "$RUNNER_TEMP/process-death-seed.txt" "$OUT/process-death-seed.txt" 2>/dev/null || true
