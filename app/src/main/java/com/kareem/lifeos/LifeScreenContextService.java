@@ -5,6 +5,10 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.os.Handler;
 import android.os.Looper;
+import com.kareem.lifeos.context.AccessibilityObservationAdapter;
+import com.kareem.lifeos.context.ObservationDeduplicator;
+import com.kareem.lifeos.context.RawObservation;
+import com.kareem.lifeos.context.UniversalObservationStore;
 import com.kareem.lifeos.engine.AccessibilityTreeCapture;
 import com.kareem.lifeos.engine.ParallelUnderstandingProbe;
 import com.kareem.lifeos.engine.RawScreenSnapshot;
@@ -16,14 +20,46 @@ import java.util.Locale;
 public final class LifeScreenContextService extends AccessibilityService {
     private static final String[] SUPPORTED={"com.whatsapp","com.whatsapp.w4b","org.telegram.messenger","org.thoughtcrime.securesms","com.facebook.orca"};
     private static final class Snapshot{final String pkg,conversation,text,thread;final LinkedHashSet<String> pieces;Snapshot(String pkg,String conversation,String text,String thread,LinkedHashSet<String> pieces){this.pkg=pkg;this.conversation=conversation;this.text=text;this.thread=thread;this.pieces=pieces;}}
-    private final Handler handler=new Handler(Looper.getMainLooper());private Snapshot pending;
+    private final Handler handler=new Handler(Looper.getMainLooper());
+    private Snapshot pending;
+    private String pendingUniversalPackage;
     private final Runnable pendingCapture=this::commitPending;
+    private final Runnable pendingUniversalCapture=this::commitUniversalCapture;
+    private static final AccessibilityObservationAdapter V2_ADAPTER=new AccessibilityObservationAdapter();
+    private final ObservationDeduplicator v2Deduplicator=new ObservationDeduplicator();
 
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
-        if(event==null||event.getPackageName()==null)return;String pkg=event.getPackageName().toString();if(!supported(pkg))return;Snapshot next=prepare(pkg);if(next==null)return;pending=next;handler.removeCallbacks(pendingCapture);handler.postDelayed(pendingCapture,1200);
+        if(event==null||event.getPackageName()==null)return;
+        String pkg=event.getPackageName().toString();
+
+        // V2 path: observe any foreground app except LifeOS itself. Debounced to avoid event storms.
+        if(!getPackageName().equals(pkg)){
+            pendingUniversalPackage=pkg;
+            handler.removeCallbacks(pendingUniversalCapture);
+            handler.postDelayed(pendingUniversalCapture,700);
+        }
+
+        // Legacy M1 conversation path stays restricted to the apps it understands today.
+        if(!supported(pkg))return;
+        Snapshot next=prepare(pkg);if(next==null)return;pending=next;handler.removeCallbacks(pendingCapture);handler.postDelayed(pendingCapture,1200);
     }
     @Override public void onInterrupt(){}
-    @Override public void onDestroy(){handler.removeCallbacks(pendingCapture);super.onDestroy();}
+    @Override public void onDestroy(){handler.removeCallbacks(pendingCapture);handler.removeCallbacks(pendingUniversalCapture);v2Deduplicator.reset();super.onDestroy();}
+
+    private void commitUniversalCapture(){
+        String expected=pendingUniversalPackage;pendingUniversalPackage=null;if(expected==null||expected.isEmpty())return;
+        AccessibilityNodeInfo root=getRootInActiveWindow();if(root==null)return;
+        CharSequence actual=root.getPackageName();if(actual==null||!expected.equals(actual.toString())){root.recycle();return;}
+        try{
+            int width=getResources().getDisplayMetrics().widthPixels;
+            int height=getResources().getDisplayMetrics().heightPixels;
+            RawScreenSnapshot raw=AccessibilityTreeCapture.capture(root,expected,System.currentTimeMillis(),width,height);
+            RawObservation observation=V2_ADAPTER.adapt(raw);
+            ObservationDeduplicator.Decision decision=v2Deduplicator.evaluate(observation);
+            if(decision.persist)UniversalObservationStore.get(this).append(observation);
+        }catch(Throwable ignored){}finally{root.recycle();}
+    }
+
     private Snapshot prepare(String pkg){AccessibilityNodeInfo root=getRootInActiveWindow();if(root==null)return null;CharSequence actual=root.getPackageName();if(actual==null||!pkg.equals(actual.toString())){root.recycle();return null;}
         try{
             int width=getResources().getDisplayMetrics().widthPixels;

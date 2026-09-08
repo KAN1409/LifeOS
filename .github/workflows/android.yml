@@ -4,21 +4,318 @@ on:
     branches: [ main ]
   pull_request:
   workflow_dispatch:
+
+concurrency:
+  group: lifeos-android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
+    name: Build, unit, lint and static architecture QA
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - run: gradle :app:testDebugUnitTest :app:assembleDebug
-      - uses: actions/upload-artifact@v4
+      - name: Static security and architecture QA
+        run: |
+          python3 scripts/qa_static.py
+          python3 scripts/qa_exhaustive.py
+      - name: Unit tests — debug and release
+        run: gradle :app:testDebugUnitTest :app:testReleaseUnitTest
+      - name: Compile exhaustive instrumentation suite
+        run: gradle :app:assembleDebugAndroidTest
+      - name: Android lint
+        run: gradle :app:lintDebug
+      - name: Assemble debug and release
+        run: gradle :app:assembleDebug :app:assembleRelease
+      - name: Upload QA reports
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          name: LifeOS-0.8.3-M1.4-v14-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: LifeOS-QA-reports
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/qa/
+          if-no-files-found: ignore
+      - name: Upload unsigned release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LifeOS-V2-release-unsigned-apk
+          path: app/build/outputs/apk/release/app-release-unsigned.apk
+
+  emulator-matrix:
+    name: Android API ${{ matrix.api }} exhaustive device QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [26, 30, 33, 35, 36]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Install emulator image
+        run: |
+          CMDLINE_BIN="$ANDROID_SDK_ROOT/cmdline-tools/16.0/bin"
+          test -x "$CMDLINE_BIN/sdkmanager"
+          yes | "$CMDLINE_BIN/sdkmanager" --licenses >/dev/null || true
+          "$CMDLINE_BIN/sdkmanager" \
+            "platform-tools" \
+            "emulator" \
+            "platforms;android-${{ matrix.api }}" \
+            "system-images;android-${{ matrix.api }};google_apis;x86_64"
+          test -f "$ANDROID_SDK_ROOT/system-images/android-${{ matrix.api }}/google_apis/x86_64/system.img"
+
+      - name: Create clean AVD
+        run: |
+          NAME="lifeos_api${{ matrix.api }}"
+          AVD_ROOT="$HOME/.android/avd"
+          AVD_DIR="$AVD_ROOT/$NAME.avd"
+          mkdir -p "$AVD_DIR"
+          cat > "$AVD_ROOT/$NAME.ini" <<EOF
+          avd.ini.encoding=UTF-8
+          path=$AVD_DIR
+          path.rel=avd/$NAME.avd
+          target=android-${{ matrix.api }}
+          EOF
+          cat > "$AVD_DIR/config.ini" <<EOF
+          AvdId=$NAME
+          PlayStore.enabled=false
+          abi.type=x86_64
+          avd.ini.displayname=LifeOS API ${{ matrix.api }}
+          avd.ini.encoding=UTF-8
+          disk.dataPartition.size=3072M
+          fastboot.forceColdBoot=yes
+          fastboot.forceFastBoot=no
+          hw.accelerometer=yes
+          hw.audioInput=no
+          hw.battery=yes
+          hw.camera.back=none
+          hw.camera.front=none
+          hw.cpu.arch=x86_64
+          hw.cpu.ncore=2
+          hw.dPad=no
+          hw.device.manufacturer=Google
+          hw.device.name=pixel
+          hw.gps=yes
+          hw.gpu.enabled=yes
+          hw.gpu.mode=swiftshader_indirect
+          hw.initialOrientation=Portrait
+          hw.keyboard=yes
+          hw.lcd.density=420
+          hw.lcd.height=2400
+          hw.lcd.width=1080
+          hw.mainKeys=no
+          hw.ramSize=3072
+          hw.sdCard=no
+          hw.sensors.orientation=yes
+          hw.sensors.proximity=yes
+          image.sysdir.1=system-images/android-${{ matrix.api }}/google_apis/x86_64/
+          runtime.network.latency=none
+          runtime.network.speed=full
+          showDeviceFrame=no
+          skin.dynamic=yes
+          tag.display=Google APIs
+          tag.id=google_apis
+          vm.heapSize=384
+          EOF
+          "$ANDROID_SDK_ROOT/emulator/emulator" -list-avds | tee "$RUNNER_TEMP/lifeos-avds.txt"
+          grep -qx "$NAME" "$RUNNER_TEMP/lifeos-avds.txt"
+
+      - name: Boot clean emulator
+        run: |
+          NAME="lifeos_api${{ matrix.api }}"
+          if [ -e /dev/kvm ]; then sudo chmod 666 /dev/kvm || true; fi
+          nohup "$ANDROID_SDK_ROOT/emulator/emulator" \
+            -avd "$NAME" -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data \
+            -camera-back none -camera-front none -gpu swiftshader_indirect \
+            > "$RUNNER_TEMP/lifeos-emulator.log" 2>&1 &
+          timeout 180 adb wait-for-device
+          timeout 420 bash -c 'until [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d "\r")" = "1" ]; do sleep 5; done'
+          adb shell input keyevent 82 || true
+          adb shell settings put global window_animation_scale 0 || true
+          adb shell settings put global transition_animation_scale 0 || true
+          adb shell settings put global animator_duration_scale 0 || true
+          adb shell getprop ro.build.version.sdk
+          adb shell getprop ro.build.version.release
+          adb logcat -c || true
+
+      - name: Run exhaustive LifeOS instrumentation suite
+        run: gradle :app:connectedDebugAndroidTest --stacktrace
+
+      - name: Verify recovery after real runtime-permission revocation
+        run: |
+          PKG="com.kareem.lifeos"
+          OUT="$RUNNER_TEMP/permission-revoked.txt"
+          adb shell pm revoke "$PKG" android.permission.READ_CONTACTS || true
+          adb shell pm revoke "$PKG" android.permission.READ_CALENDAR || true
+          adb shell pm revoke "$PKG" android.permission.ACCESS_FINE_LOCATION || true
+          adb shell pm revoke "$PKG" android.permission.ACCESS_COARSE_LOCATION || true
+          adb shell pm revoke "$PKG" android.permission.RECORD_AUDIO || true
+          if [ "${{ matrix.api }}" -ge 33 ]; then
+            adb shell pm revoke "$PKG" android.permission.POST_NOTIFICATIONS || true
+          fi
+          sleep 2
+          adb shell am instrument -w \
+            -e class 'com.kareem.lifeos.PermissionRevokedStateInstrumentationTest#providersAndSurfacesRecoverAfterExternalPermissionRevocation' \
+            -e permissionPhase revoked \
+            com.kareem.lifeos.test/androidx.test.runner.AndroidJUnitRunner | tee "$OUT"
+          grep -q 'OK (1 test)' "$OUT"
+
+      - name: Verify real Android notification-listener ingress
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          TOKEN="LIFEOS_QA_NOTIFY_${GITHUB_RUN_ID}_${{ matrix.api }}"
+          OUT="$RUNNER_TEMP/notification-ingress.txt"
+          adb shell cmd notification allow_listener com.kareem.lifeos/.LifeNotificationListener
+          sleep 2
+          adb shell cmd notification post -t 'LifeOS QA ingress' lifeos_qa "$TOKEN"
+          sleep 3
+          adb shell am instrument -w \
+            -e class 'com.kareem.lifeos.SystemIngressInstrumentationTest#verifyNotificationListenerReceivedExternalSystemNotification' \
+            -e phase notification \
+            -e token "$TOKEN" \
+            com.kareem.lifeos.test/androidx.test.runner.AndroidJUnitRunner | tee "$OUT"
+          grep -q 'OK (1 test)' "$OUT"
+
+      - name: Verify real Android accessibility-service ingress
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          OUT="$RUNNER_TEMP/accessibility-ingress.txt"
+          adb shell settings put secure enabled_accessibility_services com.kareem.lifeos/.LifeScreenContextService
+          adb shell settings put secure accessibility_enabled 1
+          sleep 2
+          adb shell am start -W -a android.settings.SETTINGS
+          sleep 4
+          adb shell am instrument -w \
+            -e class 'com.kareem.lifeos.SystemIngressInstrumentationTest#verifyAccessibilityServiceReceivedExternalAppTree' \
+            -e phase accessibility \
+            com.kareem.lifeos.test/androidx.test.runner.AndroidJUnitRunner | tee "$OUT"
+          grep -q 'OK (1 test)' "$OUT"
+
+      - name: Verify persistence across a real app process death
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          SEED="$RUNNER_TEMP/process-death-seed.txt"
+          VERIFY="$RUNNER_TEMP/process-death-verify.txt"
+          adb shell am instrument -w \
+            -e class 'com.kareem.lifeos.ProcessDeathPersistenceInstrumentationTest#seedBeforeExternalForceStop' \
+            -e phase seed \
+            com.kareem.lifeos.test/androidx.test.runner.AndroidJUnitRunner | tee "$SEED"
+          grep -q 'OK (1 test)' "$SEED"
+          adb shell am force-stop com.kareem.lifeos
+          sleep 1
+          adb shell am instrument -w \
+            -e class 'com.kareem.lifeos.ProcessDeathPersistenceInstrumentationTest#verifyAfterExternalForceStop' \
+            -e phase verify \
+            com.kareem.lifeos.test/androidx.test.runner.AndroidJUnitRunner | tee "$VERIFY"
+          grep -q 'OK (1 test)' "$VERIFY"
+
+      - name: Cold and warm startup performance probes
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          mkdir -p app/build/emulator-diagnostics/api-${{ matrix.api }}
+          cp "$RUNNER_TEMP/permission-revoked.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/permission-revoked.txt 2>/dev/null || true
+          cp "$RUNNER_TEMP/notification-ingress.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/notification-ingress.txt 2>/dev/null || true
+          cp "$RUNNER_TEMP/accessibility-ingress.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/accessibility-ingress.txt 2>/dev/null || true
+          cp "$RUNNER_TEMP/process-death-seed.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/process-death-seed.txt 2>/dev/null || true
+          cp "$RUNNER_TEMP/process-death-verify.txt" app/build/emulator-diagnostics/api-${{ matrix.api }}/process-death-verify.txt 2>/dev/null || true
+          adb shell am force-stop com.kareem.lifeos || true
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity > app/build/emulator-diagnostics/api-${{ matrix.api }}/cold-start.txt
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity > app/build/emulator-diagnostics/api-${{ matrix.api }}/warm-start.txt
+          adb shell dumpsys meminfo com.kareem.lifeos > app/build/emulator-diagnostics/api-${{ matrix.api }}/meminfo.txt || true
+          adb shell dumpsys gfxinfo com.kareem.lifeos > app/build/emulator-diagnostics/api-${{ matrix.api }}/gfxinfo.txt || true
+          adb shell dumpsys package com.kareem.lifeos > app/build/emulator-diagnostics/api-${{ matrix.api }}/package.txt || true
+
+      - name: Package-restricted Monkey exploration
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          adb shell monkey -p com.kareem.lifeos --pct-syskeys 0 --pct-anyevent 0 --throttle 35 -s 424242 1200 \
+            > "$RUNNER_TEMP/lifeos-monkey.txt" 2>&1
+
+      - name: Collect emulator diagnostics
+        if: always()
+        run: |
+          OUT="app/build/emulator-diagnostics/api-${{ matrix.api }}"
+          mkdir -p "$OUT"
+          cp "$RUNNER_TEMP/lifeos-avds.txt" "$OUT/avds.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/lifeos-emulator.log" "$OUT/emulator.log" 2>/dev/null || true
+          cp "$RUNNER_TEMP/lifeos-monkey.txt" "$OUT/monkey.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/permission-revoked.txt" "$OUT/permission-revoked.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/notification-ingress.txt" "$OUT/notification-ingress.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/accessibility-ingress.txt" "$OUT/accessibility-ingress.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/process-death-seed.txt" "$OUT/process-death-seed.txt" 2>/dev/null || true
+          cp "$RUNNER_TEMP/process-death-verify.txt" "$OUT/process-death-verify.txt" 2>/dev/null || true
+          timeout 10 adb shell getprop > "$OUT/getprop.txt" 2>/dev/null || true
+          timeout 15 adb logcat -d -v threadtime > "$OUT/logcat.txt" 2>/dev/null || true
+          timeout 10 adb shell dumpsys activity processes > "$OUT/processes.txt" 2>/dev/null || true
+
+      - name: Fail on LifeOS crash or ANR found during exploration
+        if: ${{ matrix.api == 35 || matrix.api == 36 }}
+        run: |
+          LOG="app/build/emulator-diagnostics/api-${{ matrix.api }}/logcat.txt"
+          if grep -E -A 16 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos|Fatal signal' "$LOG" | grep -q 'com\.kareem\.lifeos'; then
+            echo 'LifeOS crash/ANR signature found in emulator logcat'
+            grep -E -A 16 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos|Fatal signal' "$LOG" | grep -B 2 -A 12 'com\.kareem\.lifeos' || true
+            exit 1
+          fi
+
+      - name: Check out v46 update baseline
+        if: ${{ matrix.api == 35 }}
+        uses: actions/checkout@v4
+        with:
+          ref: c533ca86ed62d77abbce38a7ad2db142e8e49339
+          path: baseline-v46
+
+      - name: Verify v46 to v48 Android package update preserves private data
+        if: ${{ matrix.api == 35 }}
+        run: |
+          gradle -p baseline-v46 :app:assembleDebug
+          BASELINE="baseline-v46/app/build/outputs/apk/debug/app-debug.apk"
+          CURRENT="app/build/outputs/apk/debug/app-debug.apk"
+          test -f "$BASELINE"
+          test -f "$CURRENT"
+          adb uninstall com.kareem.lifeos >/dev/null 2>&1 || true
+          adb install "$BASELINE"
+          adb shell dumpsys package com.kareem.lifeos | grep -q 'versionCode=46'
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity >/dev/null
+          adb shell run-as com.kareem.lifeos sh -c 'mkdir -p files; echo V46_TO_V48 > files/qa_update_marker'
+          test "$(adb shell run-as com.kareem.lifeos cat files/qa_update_marker | tr -d '\r')" = 'V46_TO_V48'
+          adb install -r "$CURRENT"
+          adb shell dumpsys package com.kareem.lifeos | grep -q 'versionCode=48'
+          test "$(adb shell run-as com.kareem.lifeos cat files/qa_update_marker | tr -d '\r')" = 'V46_TO_V48'
+          adb logcat -c
+          adb shell am start -W -n com.kareem.lifeos/.FeedActivity | tee "$RUNNER_TEMP/update-launch.txt"
+          sleep 2
+          adb shell pidof com.kareem.lifeos
+          if adb logcat -d -v brief | grep -E -A 12 'FATAL EXCEPTION|ANR in com\.kareem\.lifeos' | grep -q 'com\.kareem\.lifeos'; then
+            echo 'LifeOS failed after v46 -> v48 package update'
+            exit 1
+          fi
+
+      - name: Upload API-specific instrumentation results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LifeOS-emulator-api-${{ matrix.api }}-results
+          path: |
+            app/build/reports/androidTests/
+            app/build/outputs/androidTest-results/
+            app/build/emulator-diagnostics/api-${{ matrix.api }}/
+          if-no-files-found: ignore

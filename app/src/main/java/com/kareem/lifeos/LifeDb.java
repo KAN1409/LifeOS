@@ -5,85 +5,67 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 
 final class LifeDb extends SQLiteOpenHelper {
-    static final class Event {
-        final long id, at;
-        final String app, title, body, threadKey;
-        Event(long id, long at, String app, String title, String body, String threadKey) {
-            this.id=id; this.at=at; this.app=app; this.title=title; this.body=body; this.threadKey=threadKey;
-        }
-    }
-    static final class Loop {
-        final long id, evidenceId, dueAt;
-        final String kind, title, status;
-        Loop(long id,long evidenceId,long dueAt,String kind,String title,String status){
-            this.id=id;this.evidenceId=evidenceId;this.dueAt=dueAt;this.kind=kind;this.title=title;this.status=status;
-        }
-    }
+    static final class Event { final long id,at;final String app,title,body,threadKey;Event(long id,long at,String app,String title,String body,String threadKey){this.id=id;this.at=at;this.app=app;this.title=title;this.body=body;this.threadKey=threadKey;} }
+    static final class Loop { final long id,evidenceId,dueAt;final String kind,title,status;final int priority;final double confidence;Loop(long id,long evidenceId,long dueAt,String kind,String title,String status,int priority,double confidence){this.id=id;this.evidenceId=evidenceId;this.dueAt=dueAt;this.kind=kind;this.title=title;this.status=status;this.priority=priority;this.confidence=confidence;} }
+    static final class Conversation { final String app,threadKey,label;final long latestEventId,latestAt;final int count;final String preview;Conversation(String app,String threadKey,String label,long latestEventId,long latestAt,int count,String preview){this.app=app;this.threadKey=threadKey;this.label=label;this.latestEventId=latestEventId;this.latestAt=latestAt;this.count=count;this.preview=preview;} }
+    static final class Decision { final long id,createdAt;final String title,context,options,choice,consequences,status;Decision(long id,long createdAt,String title,String context,String options,String choice,String consequences,String status){this.id=id;this.createdAt=createdAt;this.title=title;this.context=context;this.options=options;this.choice=choice;this.consequences=consequences;this.status=status;} }
 
-    LifeDb(Context context) { super(context, "lifeos.db", null, 3); }
-
-    @Override public void onConfigure(SQLiteDatabase db) {
-        db.setForeignKeyConstraintsEnabled(true);
-        db.enableWriteAheadLogging();
-    }
-
-    @Override public void onCreate(SQLiteDatabase db) {
+    LifeDb(Context context){super(context,"lifeos.db",null,5);}
+    @Override public void onConfigure(SQLiteDatabase db){db.setForeignKeyConstraintsEnabled(true);db.enableWriteAheadLogging();}
+    @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE events(id INTEGER PRIMARY KEY AUTOINCREMENT, source_key TEXT NOT NULL UNIQUE, app TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL, thread_key TEXT NOT NULL, captured_at INTEGER NOT NULL, updated_at INTEGER NOT NULL)");
-        db.execSQL("CREATE INDEX events_time ON events(captured_at DESC)");
-        db.execSQL("CREATE INDEX events_thread ON events(thread_key,captured_at DESC)");
-        db.execSQL("CREATE TABLE open_loops(id INTEGER PRIMARY KEY AUTOINCREMENT, evidence_id INTEGER NOT NULL, fingerprint TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, title TEXT NOT NULL, due_at INTEGER NOT NULL DEFAULT 0, confidence REAL NOT NULL, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL, FOREIGN KEY(evidence_id) REFERENCES events(id) ON DELETE CASCADE)");
-        db.execSQL("CREATE INDEX loops_status ON open_loops(status,due_at)");
-        createAliases(db);
+        db.execSQL("CREATE INDEX events_time ON events(captured_at DESC)");db.execSQL("CREATE INDEX events_thread ON events(thread_key,captured_at DESC)");
+        db.execSQL("CREATE TABLE open_loops(id INTEGER PRIMARY KEY AUTOINCREMENT, evidence_id INTEGER NOT NULL, fingerprint TEXT NOT NULL UNIQUE, kind TEXT NOT NULL, title TEXT NOT NULL, due_at INTEGER NOT NULL DEFAULT 0, confidence REAL NOT NULL, priority INTEGER NOT NULL DEFAULT 50, status TEXT NOT NULL DEFAULT 'open', created_at INTEGER NOT NULL, FOREIGN KEY(evidence_id) REFERENCES events(id) ON DELETE CASCADE)");
+        db.execSQL("CREATE INDEX loops_status ON open_loops(status,priority DESC,due_at)");createAliases(db);createDecisions(db);
     }
-    @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion) {
+    @Override public void onUpgrade(SQLiteDatabase db,int oldVersion,int newVersion){
         if(oldVersion<2){createAliases(db);db.execSQL("INSERT OR IGNORE INTO notification_aliases(source_key,event_id,first_seen_at) SELECT source_key,id,captured_at FROM events");}
         if(oldVersion<3)db.execSQL("UPDATE open_loops SET status='invalidated' WHERE status='open' AND kind='appointment' AND lower(trim(title)) IN ('today','tomorrow','tonight','النهارده','النهاردة','بكرة','بكره','الليلة')");
+        if(oldVersion<4)invalidateLegacyMachineLoops(db);
+        if(oldVersion<5){db.execSQL("ALTER TABLE open_loops ADD COLUMN priority INTEGER NOT NULL DEFAULT 50");db.execSQL("DELETE FROM open_loops WHERE status='open'");db.execSQL("CREATE INDEX IF NOT EXISTS loops_priority ON open_loops(status,priority DESC,due_at)");createDecisions(db);reanalyzeStoredEvents(db);}
     }
-
+    private static void invalidateLegacyMachineLoops(SQLiteDatabase db){
+        db.execSQL("UPDATE open_loops SET status='invalidated' WHERE status='open' AND evidence_id IN (SELECT id FROM events WHERE lower(title||' '||body) LIKE '%charged%' OR lower(title||' '||body) LIKE '%credit card%' OR lower(title||' '||body) LIKE '%debit card%' OR lower(title||' '||body) LIKE '%google play%' OR lower(title||' '||body) LIKE '%receipt%' OR lower(title||' '||body) LIKE '%subscription%' OR lower(title||' '||body) LIKE '%renewal%' OR lower(title||' '||body) LIKE '%verification code%' OR lower(title||' '||body) LIKE '%otp%')");
+    }
     private static void createAliases(SQLiteDatabase db){db.execSQL("CREATE TABLE IF NOT EXISTS notification_aliases(source_key TEXT PRIMARY KEY,event_id INTEGER NOT NULL,first_seen_at INTEGER NOT NULL,FOREIGN KEY(event_id) REFERENCES events(id) ON DELETE CASCADE)");}
+    private static void createDecisions(SQLiteDatabase db){db.execSQL("CREATE TABLE IF NOT EXISTS decisions(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,context TEXT NOT NULL DEFAULT '',options TEXT NOT NULL DEFAULT '',choice TEXT NOT NULL DEFAULT '',consequences TEXT NOT NULL DEFAULT '',status TEXT NOT NULL DEFAULT 'active',created_at INTEGER NOT NULL,updated_at INTEGER NOT NULL)");db.execSQL("CREATE INDEX IF NOT EXISTS decisions_time ON decisions(created_at DESC)");}
+    private static void reanalyzeStoredEvents(SQLiteDatabase db){ArrayList<Long> ids=new ArrayList<>();ArrayList<String> threads=new ArrayList<>();ArrayList<OpenLoopExtractor.Candidate> candidates=new ArrayList<>();try(Cursor c=db.rawQuery("SELECT id,title,body,thread_key,captured_at FROM events",null)){while(c.moveToNext()){for(OpenLoopExtractor.Candidate x:OpenLoopExtractor.extract(c.getString(1),c.getString(2),c.getLong(4))){ids.add(c.getLong(0));threads.add(c.getString(3));candidates.add(x);}}}for(int i=0;i<candidates.size();i++){OpenLoopExtractor.Candidate x=candidates.get(i);long evidenceId=ids.get(i);db.execSQL("INSERT OR IGNORE INTO open_loops(evidence_id,fingerprint,kind,title,due_at,confidence,priority,status,created_at) SELECT ?,?,?,?,?,?,?,'open',? WHERE NOT EXISTS (SELECT 1 FROM open_loops WHERE evidence_id=? AND kind=? AND status!='open')",new Object[]{evidenceId,x.scopedFingerprint(threads.get(i)),x.kind,x.title,x.dueAt,x.confidence,x.priority,System.currentTimeMillis(),evidenceId,x.kind});}}
 
-    long upsertEvent(String sourceKey,String app,String title,String body,String threadKey,long at) {
-        SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{
-            long id=aliasEventId(db,sourceKey);
-            if(id>0){db.execSQL("UPDATE events SET title=?,body=?,thread_key=?,updated_at=? WHERE id=?",new Object[]{title,body,threadKey,System.currentTimeMillis(),id});db.setTransactionSuccessful();return id;}
-            try(Cursor c=db.rawQuery("SELECT id FROM events WHERE app=? AND title=? AND body=? AND thread_key=? AND captured_at BETWEEN ? AND ? ORDER BY captured_at DESC LIMIT 1",new String[]{app,title,body,threadKey,String.valueOf(at-5000),String.valueOf(at+5000)})){if(c.moveToFirst())id=c.getLong(0);}
-            if(id<=0){db.execSQL("INSERT INTO events(source_key,app,title,body,thread_key,captured_at,updated_at) VALUES(?,?,?,?,?,?,?)",new Object[]{sourceKey,app,title,body,threadKey,at,System.currentTimeMillis()});try(Cursor c=db.rawQuery("SELECT last_insert_rowid()",null)){if(c.moveToFirst())id=c.getLong(0);}}
-            if(id>0)db.execSQL("INSERT OR REPLACE INTO notification_aliases(source_key,event_id,first_seen_at) VALUES(?,?,?)",new Object[]{sourceKey,id,at});
-            db.setTransactionSuccessful();return id;
-        }finally{db.endTransaction();}
-    }
-
+    long upsertEvent(String sourceKey,String app,String title,String body,String threadKey,long at){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{long id=aliasEventId(db,sourceKey);if(id>0){db.execSQL("UPDATE events SET title=?,body=?,thread_key=?,updated_at=? WHERE id=?",new Object[]{title,body,threadKey,System.currentTimeMillis(),id});db.setTransactionSuccessful();return id;}try(Cursor c=db.rawQuery("SELECT id FROM events WHERE app=? AND title=? AND body=? AND thread_key=? AND captured_at BETWEEN ? AND ? ORDER BY captured_at DESC LIMIT 1",new String[]{app,title,body,threadKey,String.valueOf(at-5000),String.valueOf(at+5000)})){if(c.moveToFirst())id=c.getLong(0);}if(id<=0){db.execSQL("INSERT INTO events(source_key,app,title,body,thread_key,captured_at,updated_at) VALUES(?,?,?,?,?,?,?)",new Object[]{sourceKey,app,title,body,threadKey,at,System.currentTimeMillis()});try(Cursor c=db.rawQuery("SELECT last_insert_rowid()",null)){if(c.moveToFirst())id=c.getLong(0);}}if(id>0)db.execSQL("INSERT OR REPLACE INTO notification_aliases(source_key,event_id,first_seen_at) VALUES(?,?,?)",new Object[]{sourceKey,id,at});db.setTransactionSuccessful();return id;}finally{db.endTransaction();}}
     long upsertScreenEvent(String sourceKey,String app,String title,String body,String threadKey,long at){long id=upsertEvent(sourceKey,app,title,body,threadKey,at);if(id>0)getWritableDatabase().execSQL("UPDATE events SET captured_at=?,updated_at=? WHERE id=?",new Object[]{at,System.currentTimeMillis(),id});return id;}
-
     private static long aliasEventId(SQLiteDatabase db,String sourceKey){try(Cursor c=db.rawQuery("SELECT event_id FROM notification_aliases WHERE source_key=?",new String[]{sourceKey})){return c.moveToFirst()?c.getLong(0):0;}}
+    void upsertLoop(long evidenceId,OpenLoopExtractor.Candidate x){SQLiteDatabase db=getWritableDatabase();Event source=eventById(evidenceId);if(source==null||!EventSemantics.supportsLoop(source,x.kind))return;String fingerprint=x.scopedFingerprint(source.threadKey);db.execSQL("INSERT OR IGNORE INTO open_loops(evidence_id,fingerprint,kind,title,due_at,confidence,priority,created_at) VALUES(?,?,?,?,?,?,?,?)",new Object[]{evidenceId,fingerprint,x.kind,x.title,x.dueAt,x.confidence,x.priority,System.currentTimeMillis()});db.execSQL("UPDATE open_loops SET priority=MAX(priority,?),confidence=MAX(confidence,?) WHERE fingerprint=?",new Object[]{x.priority,x.confidence,fingerprint});}
+    Event eventById(long id){try(Cursor c=getReadableDatabase().rawQuery("SELECT id,captured_at,app,title,body,thread_key FROM events WHERE id=? LIMIT 1",new String[]{String.valueOf(id)})){return c.moveToFirst()?event(c):null;}}
 
-    void upsertLoop(long evidenceId,OpenLoopExtractor.Candidate x) {
-        getWritableDatabase().execSQL("INSERT OR IGNORE INTO open_loops(evidence_id,fingerprint,kind,title,due_at,confidence,created_at) VALUES(?,?,?,?,?,?,?)",
-                new Object[]{evidenceId,x.fingerprint,x.kind,x.title,x.dueAt,x.confidence,System.currentTimeMillis()});
-    }
+    List<Event> recentEvents(int limit){ArrayList<Event> out=new ArrayList<>();try(Cursor c=getReadableDatabase().rawQuery("SELECT id,captured_at,app,title,body,thread_key FROM events ORDER BY captured_at DESC LIMIT ?",new String[]{String.valueOf(Math.max(limit*3,limit))})){while(c.moveToNext()&&out.size()<limit){Event next=event(c);if(CapturePolicy.isNotificationSummary(next.body)||CapturePolicy.isLauncherSnapshot(next.body)||CapturePolicy.isMessagingHomeSnapshot(next.body))continue;boolean duplicate=false;for(Event seen:out){boolean visible="Visible conversation".equals(seen.title)&&"Visible conversation".equals(next.title)&&same(seen.app,next.app);boolean sameVisible=visible&&(same(seen.threadKey,next.threadKey)||CapturePolicy.sameConversationSnapshot(seen.body,next.body));boolean notificationInsideScreen="Visible conversation".equals(seen.title)&&same(seen.app,next.app)&&CapturePolicy.screenThreadMatchesNotification(seen.threadKey,next.title)&&(seen.body.contains(next.body)||CapturePolicy.sameConversationSnapshot(seen.body,next.body));if(sameVisible||notificationInsideScreen||(Math.abs(seen.at-next.at)<=10000&&same(seen.app,next.app)&&same(seen.title,next.title)&&same(seen.body,next.body))){duplicate=true;break;}}if(!duplicate)out.add(next);}}return out;}
 
-    List<Event> recentEvents(int limit) {
-        ArrayList<Event> out=new ArrayList<>();
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT id,captured_at,app,title,body,thread_key FROM events ORDER BY captured_at DESC LIMIT ?",new String[]{String.valueOf(Math.max(limit*3,limit))})) {
-            while(c.moveToNext()&&out.size()<limit){Event next=new Event(c.getLong(0),c.getLong(1),c.getString(2),c.getString(3),c.getString(4),c.getString(5));if(CapturePolicy.isNotificationSummary(next.body)||CapturePolicy.isLauncherSnapshot(next.body)||CapturePolicy.isMessagingHomeSnapshot(next.body))continue;boolean duplicate=false;for(Event seen:out){boolean visible="Visible conversation".equals(seen.title)&&"Visible conversation".equals(next.title)&&same(seen.app,next.app);boolean sameVisible=visible&&(same(seen.threadKey,next.threadKey)||CapturePolicy.sameConversationSnapshot(seen.body,next.body));boolean notificationInsideScreen="Visible conversation".equals(seen.title)&&same(seen.app,next.app)&&CapturePolicy.screenThreadMatchesNotification(seen.threadKey,next.title)&&(seen.body.contains(next.body)||CapturePolicy.sameConversationSnapshot(seen.body,next.body));if(sameVisible||notificationInsideScreen||(Math.abs(seen.at-next.at)<=10000&&same(seen.app,next.app)&&same(seen.title,next.title)&&same(seen.body,next.body))){duplicate=true;break;}}if(!duplicate)out.add(next);}
-        }
-        return out;
-    }
+    List<Event> eventsForThread(String app,String threadKey,String fallbackTitle,int limit){ArrayList<Event> out=new ArrayList<>();String key=clean(threadKey),title=clean(fallbackTitle);String sql;String[] args;if(!key.isEmpty()){sql="SELECT id,captured_at,app,title,body,thread_key FROM events WHERE app=? AND thread_key=? ORDER BY captured_at DESC LIMIT ?";args=new String[]{app,key,String.valueOf(Math.max(limit*2,limit))};}else{sql="SELECT id,captured_at,app,title,body,thread_key FROM events WHERE app=? AND title=? ORDER BY captured_at DESC LIMIT ?";args=new String[]{app,title,String.valueOf(Math.max(limit*2,limit))};}try(Cursor c=getReadableDatabase().rawQuery(sql,args)){while(c.moveToNext()&&out.size()<limit){Event next=event(c);if(!duplicateMessage(out,next))out.add(next);}}return out;}
+    List<Conversation> recentConversations(int limit){LinkedHashMap<String,MutableConversation> map=new LinkedHashMap<>();for(Event e:recentEvents(Math.max(limit*8,80))){if(!isConversationLike(e))continue;String thread=clean(e.threadKey),label=personLabel(e);if(genericConversationTitle(e.title,e.app)&&genericConversationTitle(threadLabel(thread),e.app))continue;String group=e.app+"|"+(!thread.isEmpty()?thread:label);MutableConversation m=map.get(group);if(m==null){m=new MutableConversation(e.app,thread,label,e.id,e.at,e.body);map.put(group,m);}m.count++;}ArrayList<Conversation> out=new ArrayList<>();for(MutableConversation m:map.values()){out.add(new Conversation(m.app,m.thread,m.label,m.eventId,m.at,m.count,m.preview));if(out.size()>=limit)break;}return out;}
+    List<Event> eventsForPerson(String app,String label,int limit){ArrayList<Event> out=new ArrayList<>();String q=clean(label);if(q.isEmpty())return out;try(Cursor c=getReadableDatabase().rawQuery("SELECT id,captured_at,app,title,body,thread_key FROM events WHERE app=? AND (title=? OR thread_key=? OR thread_key LIKE ? OR body LIKE ?) ORDER BY captured_at DESC LIMIT ?",new String[]{app,q,q,"%|"+q.toLowerCase(Locale.ROOT),"%"+q+"%",String.valueOf(limit)})){while(c.moveToNext())out.add(event(c));}return out;}
 
-    private static boolean same(String a,String b){return a==null?b==null:a.equals(b);}
-
-    List<Loop> openLoops(int limit) {
-        ArrayList<Loop> out=new ArrayList<>();
-        try(Cursor c=getReadableDatabase().rawQuery("SELECT id,evidence_id,due_at,kind,title,status FROM open_loops WHERE status='open' ORDER BY CASE WHEN due_at=0 THEN 1 ELSE 0 END,due_at,created_at DESC LIMIT ?",new String[]{String.valueOf(limit)})) {
-            while(c.moveToNext())out.add(new Loop(c.getLong(0),c.getLong(1),c.getLong(2),c.getString(3),c.getString(4),c.getString(5)));
-        }
-        return out;
-    }
-
+    List<Loop> openLoops(int limit){ArrayList<Loop> out=new ArrayList<>();try(Cursor c=getReadableDatabase().rawQuery("SELECT id,evidence_id,due_at,kind,title,status,priority,confidence FROM open_loops WHERE status='open' ORDER BY priority DESC,CASE WHEN due_at=0 THEN 1 ELSE 0 END,due_at,created_at DESC LIMIT ?",new String[]{String.valueOf(Math.max(limit*3,limit))})){while(c.moveToNext()&&out.size()<limit){Loop loop=new Loop(c.getLong(0),c.getLong(1),c.getLong(2),c.getString(3),c.getString(4),c.getString(5),c.getInt(6),c.getDouble(7));Event source=eventById(loop.evidenceId);if(EventSemantics.supportsLoop(source,loop.kind))out.add(loop);}}return out;}
+    Loop loopById(long id){try(Cursor c=getReadableDatabase().rawQuery("SELECT id,evidence_id,due_at,kind,title,status,priority,confidence FROM open_loops WHERE id=? LIMIT 1",new String[]{String.valueOf(id)})){if(!c.moveToFirst())return null;Loop loop=new Loop(c.getLong(0),c.getLong(1),c.getLong(2),c.getString(3),c.getString(4),c.getString(5),c.getInt(6),c.getDouble(7));return EventSemantics.supportsLoop(eventById(loop.evidenceId),loop.kind)?loop:null;}}
+    int openLoopCount(){return openLoops(10000).size();}
     void closeLoop(long id){getWritableDatabase().execSQL("UPDATE open_loops SET status='done' WHERE id=?",new Object[]{id});}
+    long addDecision(String title,String context,String options,String choice,String consequences){long now=System.currentTimeMillis();android.content.ContentValues v=new android.content.ContentValues();v.put("title",clean(title));v.put("context",clean(context));v.put("options",clean(options));v.put("choice",clean(choice));v.put("consequences",clean(consequences));v.put("status","active");v.put("created_at",now);v.put("updated_at",now);return getWritableDatabase().insert("decisions",null,v);}
+    List<Decision> recentDecisions(int limit){ArrayList<Decision> out=new ArrayList<>();try(Cursor c=getReadableDatabase().rawQuery("SELECT id,created_at,title,context,options,choice,consequences,status FROM decisions ORDER BY created_at DESC LIMIT ?",new String[]{String.valueOf(limit)})){while(c.moveToNext())out.add(new Decision(c.getLong(0),c.getLong(1),c.getString(2),c.getString(3),c.getString(4),c.getString(5),c.getString(6),c.getString(7)));}return out;}
     long count(String table){try(Cursor c=getReadableDatabase().rawQuery("SELECT COUNT(*) FROM "+table,null)){return c.moveToFirst()?c.getLong(0):0;}}
-    void eraseAll(){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("open_loops",null,null);db.delete("events",null,null);db.setTransactionSuccessful();}finally{db.endTransaction();}}
+    void eraseAll(){SQLiteDatabase db=getWritableDatabase();db.beginTransaction();try{db.delete("open_loops",null,null);db.delete("events",null,null);db.delete("decisions",null,null);db.setTransactionSuccessful();}finally{db.endTransaction();}}
+
+    static boolean isConversationLike(Event e){return EventSemantics.isPersonConversation(e);}
+    static String personLabel(Event e){if(e==null)return "Conversation";String t=clean(e.title);if(!genericConversationTitle(t,e.app))return t;String k=threadLabel(e.threadKey);if(!genericConversationTitle(k,e.app))return k;String b=clean(e.body);int colon=b.indexOf(':');if(colon>1&&colon<80)return b.substring(0,colon).trim();int dot=b.indexOf(" · ");if(dot>0&&dot<80)return b.substring(0,dot).trim();return friendlyApp(e.app);}
+    static String threadLabel(String value){String x=clean(value);int pipe=x.lastIndexOf('|');if(pipe>=0&&pipe<x.length()-1)x=x.substring(pipe+1).trim();return x;}
+    static String friendlyApp(String p){String x=clean(p);if(x.isEmpty())return "Unknown";int i=x.lastIndexOf('.');x=i>=0?x.substring(i+1):x;if(x.equalsIgnoreCase("gm"))return "Gmail";if(x.equalsIgnoreCase("chatgpt"))return "ChatGPT";return x.isEmpty()?"Unknown":Character.toUpperCase(x.charAt(0))+x.substring(1);}
+    private static boolean genericConversationTitle(String value,String app){String x=clean(value).toLowerCase(Locale.ROOT);if(x.isEmpty()||x.equals("visible conversation")||x.contains("new message")||x.equals("message")||x.equals("messages"))return true;String source=friendlyApp(app).toLowerCase(Locale.ROOT);return x.equals(source)||x.equals("whatsapp")||x.equals("messenger")||x.equals("telegram");}
+    private static boolean duplicateMessage(List<Event> seen,Event next){String normalized=messageKey(next);for(Event old:seen){if(Math.abs(old.at-next.at)>15000)continue;if(same(old.app,next.app)&&normalized.equals(messageKey(old)))return true;}return false;}
+    private static String messageKey(Event e){String body=clean(e.body).replaceAll("[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\uFEFF]","").replaceAll("\\s+"," ").trim().toLowerCase(Locale.ROOT);String who=personLabel(e).toLowerCase(Locale.ROOT);if(!who.isEmpty()&&body.startsWith(who+":"))body=body.substring(who.length()+1).trim();return body;}
+    private static Event event(Cursor c){return new Event(c.getLong(0),c.getLong(1),c.getString(2),c.getString(3),c.getString(4),c.getString(5));}
+    private static String clean(String s){return s==null?"":s.trim();}
+    private static boolean same(String a,String b){return a==null?b==null:a.equals(b);}
+    private static final class MutableConversation{final String app,thread,label;final long eventId,at;final String preview;int count;MutableConversation(String app,String thread,String label,long eventId,long at,String preview){this.app=app;this.thread=thread;this.label=label;this.eventId=eventId;this.at=at;this.preview=preview==null?"":preview;}}
 }

@@ -1,0 +1,265 @@
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.android'
+    id 'org.jetbrains.kotlin.plugin.serialization'
+    id 'com.google.devtools.ksp'
+}
+
+import java.security.MessageDigest
+
+ext.teyaRevision = 'b503872835ff3cafa8c399c4275e3e43c37d6577'
+ext.teyaGeneratedDir = layout.buildDirectory.dir('generated/upstreamAgentCore')
+ext.teyaGeneratedAssetsDir = layout.buildDirectory.dir('generated/upstreamAssets')
+ext.teyaGeneratedResDir = layout.buildDirectory.dir('generated/upstreamRes')
+ext.teyaNativeCheckoutDir = layout.buildDirectory.dir('generated/upstreamNativeRepo')
+ext.teyaAgentCore = [
+    'com/teya/agent/brain/BrainClient.kt'                  : 'f629548896225fe483fb38872903f4bbd0ee092b',
+    'com/teya/agent/brain/KtorClientFactory.kt'            : '7ed013eb150e649d79f72fd112931c40d73b83b4',
+    'com/teya/agent/brain/MistralClient.kt'                : '729e5d60475b7c57ce46a340552251e6d4dfb075',
+    'com/teya/agent/brain/MistralModels.kt'                : 'ae55b6067d71e38310defda5229235c35374fd70',
+    'com/teya/agent/brain/MistralVoices.kt'                : 'f9a233ec7a1bd3c1ec1021b581c43d18c6385ddd',
+    'com/teya/agent/persona/ToolSpec.kt'                   : '164252a81bfc600ac3e0d349d70214d2c9e31b44',
+    'com/teya/agent/persona/AgentTools.kt'                  : '1c82ca9c3d564cc823f8873d6b63cb03bde93196',
+    'com/teya/agent/persona/TeyaPersona.kt'                 : 'd7d348d7f250efdc6f0ef547f34c7e0283af1a60',
+    'com/teya/agent/calendar/CalendarManager.kt'            : 'dc20cf04cf0488a58af167285ccea2fec8338009',
+    'com/teya/agent/shopping/ShoppingListManager.kt'        : 'e1e244cd3e936475433d253e99e18882e846c0be',
+    'com/teya/agent/expenses/ExpenseManager.kt'             : '9b99ab9e291df8760a855a5c61ec9309862edd53',
+    'com/teya/agent/safety/ContactAllowlistManager.kt'      : 'e3069f958285f69e21487615366efefe74c53cfb',
+    'com/teya/agent/telephony/TelephonyActuator.kt'         : '529b128c10631a6f602c87cb882d2a6bb3d72bbb',
+    'com/teya/agent/telephony/TeyaInCallService.kt'         : '529dffae097e81777ff4f39f30ad22d6bd3ad40a',
+    'com/teya/agent/harness/ConfigManager.kt'               : '13f3138c5d55d6a5555cca910f74cc91285ffd68',
+    'com/teya/agent/harness/HarnessService.kt'              : '45d4b82ec8ec9310d7999ecc22f381bffe34a81c',
+    'com/teya/agent/timers/TimerManager.kt'                 : '4723227e0635cbfddf0285ee125e6373504f8b48',
+    'com/teya/agent/household/ContactsRepository.kt'        : 'bc6c7a2284e8f1c2b521b55dfb4b838bab2b8724',
+    'com/teya/agent/household/HouseholdManager.kt'          : 'aacd8346c71f6682626e8cbd9a07aec8c80baceb',
+    'com/teya/agent/household/Languages.kt'                 : 'd06971968985a708905a0cb7095784e46066741c',
+    'com/teya/agent/household/SpeakerIdManager.kt'          : '088c061db7c09d2fa7221b8ec0c1e13f5018ff75',
+    'com/teya/agent/voice/speaker/SpeakerEmbedder.kt'       : '26a9e0491d918c3a6380a262a55439aad95d74a5',
+    'com/teya/agent/voice/speaker/CamPlusPlusSpeakerEmbedder.kt': '868a6c84df229b6a2a8ddfb6387ebd9193120b68',
+    'com/teya/agent/voice/speaker/Fbank.kt'                 : 'fee0eef2331c9fe20ff391ba136acfb867839b33',
+    'com/teya/agent/voice/vad/SileroVad.kt'                 : '897fe8ca2bfa23d32341fed67d54d92e1d6eea3e',
+    'com/teya/agent/voice/aec/WebViewAecHost.kt'            : '93bb549b91b9dd770a73e9d7ba5872688e8aff17',
+    'com/teya/agent/voice/MicroFrontend.kt'                 : 'a91b7fd18146f2e0b9dd7b8661c8aa67d45b23b3',
+    'com/teya/agent/voice/WakeWordEngine.kt'                : 'ccb6170ac52da5dfd3a3bedadc4a039c53e40214',
+    'com/teya/agent/voice/VoicePipeline.kt'                 : 'd04fe3faa7a892aa0efbf92d8498e16a6899972f',
+]
+ext.teyaVoiceAssets = [
+    'aec_bridge.html' : '9f3c86b00153431c40f1e54ab6b2f199b5da3b45',
+    'hey_teya.json'   : 'e2e54ed9a4796883655b10b086f0d370ac90578c',
+    'hey_teya.tflite' : '123edcbd983efe43b1064d7b3e14f6493fff495c',
+    'silero_vad.onnx' : '80c5592ef1f4c9ede3e357bbd02eb863358a6a9d',
+]
+
+def gitBlobSha = { byte[] bytes ->
+    MessageDigest digest = MessageDigest.getInstance('SHA-1')
+    digest.update("blob ${bytes.length}\u0000".getBytes('UTF-8'))
+    digest.update(bytes)
+    digest.digest().collect { String.format('%02x', it) }.join()
+}
+
+def fetchVerified = { String upstreamPath, String expectedBlobSha, File target ->
+    URL url = new URL("https://raw.githubusercontent.com/adgapar/teya/${teyaRevision}/${upstreamPath}")
+    byte[] bytes = url.bytes
+    String actualBlobSha = gitBlobSha(bytes)
+    if (actualBlobSha != expectedBlobSha) {
+        throw new GradleException("Teya integrity check failed for ${upstreamPath}: expected ${expectedBlobSha}, got ${actualBlobSha}")
+    }
+    target.parentFile.mkdirs()
+    target.bytes = bytes
+}
+
+def patchHarnessForLifeOsApproval = { File harness ->
+    String text = harness.getText('UTF-8')
+
+    String constantAnchor = '        const val ACTION_TOGGLE_TOUCH_MODE = "com.teya.agent.action.TOGGLE_TOUCH_MODE"'
+    String constantPatch = '''        const val ACTION_APPROVAL_REQUEST = "com.kareem.lifeos.TEYA_APPROVAL_REQUEST"
+        const val ACTION_EXECUTE_APPROVED = "com.kareem.lifeos.TEYA_EXECUTE_APPROVED"
+        const val ACTION_EXECUTION_RESULT = "com.kareem.lifeos.TEYA_EXECUTION_RESULT"
+        const val EXTRA_TOOL_CALL_ID = "tool_call_id"
+        const val EXTRA_TOOL_NAME = "tool_name"
+        const val EXTRA_TOOL_ARGS = "tool_args"
+        const val EXTRA_TOOL_RESULT = "tool_result"
+        const val EXTRA_TOOL_OK = "tool_ok"
+        const val ACTION_TOGGLE_TOUCH_MODE = "com.teya.agent.action.TOGGLE_TOUCH_MODE"'''
+    if (!text.contains(constantAnchor)) throw new GradleException('Teya Harness approval patch: constants anchor missing')
+    text = text.replace(constantAnchor, constantPatch)
+
+    String startAnchor = '''            ACTION_TOGGLE_TOUCH_MODE -> {
+                configManager.touchModeEnabled = !configManager.touchModeEnabled'''
+    String startPatch = '''            ACTION_EXECUTE_APPROVED -> {
+                val callId = intent.getStringExtra(EXTRA_TOOL_CALL_ID).orEmpty()
+                val toolName = intent.getStringExtra(EXTRA_TOOL_NAME).orEmpty()
+                val rawArgs = intent.getStringExtra(EXTRA_TOOL_ARGS).orEmpty()
+                scope.launch {
+                    var ok = true
+                    val result = try {
+                        val json = org.json.JSONObject(rawArgs.ifBlank { "{}" })
+                        val args = mutableMapOf<String, String>()
+                        val keys = json.keys()
+                        while (keys.hasNext()) {
+                            val key = keys.next()
+                            args[key] = json.optString(key, "")
+                        }
+                        executeToolUnsafe(ToolCall(callId, toolName, args))
+                    } catch (t: Throwable) {
+                        ok = false
+                        "Execution failed: ${t.message ?: t.javaClass.simpleName}"
+                    }
+                    sendBroadcast(Intent(ACTION_EXECUTION_RESULT).apply {
+                        setPackage(packageName)
+                        putExtra(EXTRA_TOOL_CALL_ID, callId)
+                        putExtra(EXTRA_TOOL_NAME, toolName)
+                        putExtra(EXTRA_TOOL_RESULT, result)
+                        putExtra(EXTRA_TOOL_OK, ok)
+                    })
+                }
+            }
+            ACTION_TOGGLE_TOUCH_MODE -> {
+                configManager.touchModeEnabled = !configManager.touchModeEnabled'''
+    if (!text.contains(startAnchor)) throw new GradleException('Teya Harness approval patch: start-command anchor missing')
+    text = text.replace(startAnchor, startPatch)
+
+    String executeAnchor = '    private suspend fun executeTool(tool: ToolCall): String = when (tool.functionName) {'
+    String executePatch = '''    private val lifeOsReadOnlyTools = setOf("get_events", "read_shopping_list", "query_expenses")
+
+    private suspend fun executeTool(tool: ToolCall): String {
+        if (lifeOsReadOnlyTools.contains(tool.functionName)) return executeToolUnsafe(tool)
+        sendBroadcast(Intent(ACTION_APPROVAL_REQUEST).apply {
+            setPackage(packageName)
+            putExtra(EXTRA_TOOL_CALL_ID, tool.id)
+            putExtra(EXTRA_TOOL_NAME, tool.functionName)
+            putExtra(EXTRA_TOOL_ARGS, org.json.JSONObject(tool.arguments).toString())
+        })
+        return "This action is waiting for approval in LifeOS Action Center."
+    }
+
+    private suspend fun executeToolUnsafe(tool: ToolCall): String = when (tool.functionName) {'''
+    if (!text.contains(executeAnchor)) throw new GradleException('Teya Harness approval patch: executeTool anchor missing')
+    text = text.replace(executeAnchor, executePatch)
+
+    harness.setText(text, 'UTF-8')
+}
+
+tasks.register('syncTeyaAgentCore') {
+    outputs.dir(teyaGeneratedDir)
+    doLast {
+        File root = teyaGeneratedDir.get().asFile
+        teyaAgentCore.each { relativePath, expectedBlobSha ->
+            fetchVerified("app/src/main/kotlin/${relativePath}", expectedBlobSha, new File(root, relativePath))
+        }
+        // The upstream blob is verified first, then a deterministic LifeOS-only approval hook is
+        // applied to the generated build copy. Upstream source remains pinned and auditable.
+        patchHarnessForLifeOsApproval(new File(root, 'com/teya/agent/harness/HarnessService.kt'))
+    }
+}
+
+tasks.register('syncTeyaVoiceAssets') {
+    outputs.dir(teyaGeneratedAssetsDir)
+    doLast {
+        File root = teyaGeneratedAssetsDir.get().asFile
+        teyaVoiceAssets.each { fileName, expectedBlobSha ->
+            fetchVerified("app/src/main/assets/${fileName}", expectedBlobSha, new File(root, fileName))
+        }
+    }
+}
+
+tasks.register('syncTeyaHarnessResources') {
+    outputs.dir(teyaGeneratedResDir)
+    doLast {
+        File root = teyaGeneratedResDir.get().asFile
+        fetchVerified(
+            'app/src/main/res/drawable/ic_launcher_foreground.xml',
+            'd9b28d853db4f65f5e90232d469d893f9f075853',
+            new File(root, 'drawable/ic_launcher_foreground.xml')
+        )
+    }
+}
+
+tasks.register('syncTeyaNativeMicrofrontend') {
+    outputs.dir(teyaNativeCheckoutDir)
+    doLast {
+        File checkout = teyaNativeCheckoutDir.get().asFile
+        delete checkout
+        checkout.mkdirs()
+        exec { commandLine 'git', 'init', checkout.absolutePath }
+        exec { workingDir checkout; commandLine 'git', 'remote', 'add', 'origin', 'https://github.com/adgapar/teya.git' }
+        exec { workingDir checkout; commandLine 'git', 'config', 'core.sparseCheckout', 'true' }
+        File sparse = new File(checkout, '.git/info/sparse-checkout')
+        sparse.parentFile.mkdirs()
+        sparse.text = 'app/src/main/cpp/\n'
+        exec { workingDir checkout; commandLine 'git', 'fetch', '--depth', '1', 'origin', teyaRevision }
+        exec { workingDir checkout; commandLine 'git', 'checkout', '--detach', 'FETCH_HEAD' }
+        ByteArrayOutputStream out = new ByteArrayOutputStream()
+        exec {
+            workingDir checkout
+            commandLine 'git', 'rev-parse', 'HEAD'
+            standardOutput = out
+        }
+        String actualRevision = out.toString('UTF-8').trim()
+        if (actualRevision != teyaRevision) {
+            throw new GradleException("Teya native checkout revision mismatch: expected ${teyaRevision}, got ${actualRevision}")
+        }
+    }
+}
+
+android {
+    namespace 'com.teya.agent'
+    compileSdk 35
+    ndkVersion '27.3.13750724'
+
+    defaultConfig {
+        minSdk 26
+        ndk {
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path file("${buildDir}/generated/upstreamNativeRepo/app/src/main/cpp/CMakeLists.txt")
+            version '3.22.1'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main {
+            java.srcDirs = ['upstream', teyaGeneratedDir]
+            assets.srcDirs = [teyaGeneratedAssetsDir]
+            res.srcDirs = [teyaGeneratedResDir]
+            manifest.srcFile 'src/main/AndroidManifest.xml'
+        }
+    }
+}
+
+tasks.named('preBuild').configure {
+    dependsOn tasks.named('syncTeyaAgentCore')
+    dependsOn tasks.named('syncTeyaVoiceAssets')
+    dependsOn tasks.named('syncTeyaHarnessResources')
+    dependsOn tasks.named('syncTeyaNativeMicrofrontend')
+}
+
+dependencies {
+    implementation 'androidx.core:core-ktx:1.15.0'
+    implementation 'androidx.room:room-runtime:2.8.4'
+    implementation 'androidx.room:room-ktx:2.8.4'
+    implementation 'androidx.security:security-crypto:1.1.0'
+    ksp 'androidx.room:room-compiler:2.8.4'
+
+    implementation 'io.ktor:ktor-client-core:2.3.12'
+    implementation 'io.ktor:ktor-client-okhttp:2.3.12'
+    implementation 'io.ktor:ktor-client-content-negotiation:2.3.12'
+    implementation 'io.ktor:ktor-client-logging:2.3.12'
+    implementation 'io.ktor:ktor-client-websockets:2.3.12'
+    implementation 'io.ktor:ktor-serialization-kotlinx-json:2.3.12'
+    implementation 'com.microsoft.onnxruntime:onnxruntime-android:1.22.0'
+    implementation 'com.google.ai.edge.litert:litert:1.4.1'
+}
