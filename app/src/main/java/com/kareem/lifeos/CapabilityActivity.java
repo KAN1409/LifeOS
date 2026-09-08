@@ -33,7 +33,23 @@ public final class CapabilityActivity extends Activity {
     private void open(FunctionalCapabilityRegistry.ObjectItem r){if("conversations".equals(r.capabilityId)){startActivity(new Intent(this,ConversationDetailActivity.class).putExtra("conversation_id",r.objectId));return;}if("voice".equals(r.capabilityId)){startActivity(new Intent(this,VoiceMemoryDetailActivity.class).putExtra("voice_id",r.objectId));return;}startActivity(new Intent(this,FunctionalObjectDetailActivity.class).putExtra("capability_id",r.capabilityId).putExtra("object_id",r.objectId));}
 
     private void pickFile(){Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION|Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);startActivityForResult(i,FILE_PICK);}
-    private void createProject(){LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);int p=LifeOsUi.dp(this,18);form.setPadding(p,0,p,0);EditText name=new EditText(this);name.setHint("Project name");name.setSingleLine(true);EditText desc=new EditText(this);desc.setHint("Description (optional)");desc.setMinLines(2);form.addView(name);form.addView(desc);new AlertDialog.Builder(this).setTitle("Create project").setView(form).setNegativeButton("Cancel",null).setPositiveButton("Create",(d,w)->{ProjectRepository.ProjectObject x=ProjectRepository.create(this,name.getText().toString(),desc.getText().toString());if(x==null)Toast.makeText(this,"Project name is required.",Toast.LENGTH_SHORT).show();else{Toast.makeText(this,"Project created",Toast.LENGTH_SHORT).show();render();}}).show();}
+    private void createProject(){
+        LinearLayout form=new LinearLayout(this);form.setOrientation(LinearLayout.VERTICAL);int p=LifeOsUi.dp(this,18);form.setPadding(p,0,p,0);
+        EditText name=new EditText(this);name.setHint("Project name");name.setSingleLine(true);
+        EditText desc=new EditText(this);desc.setHint("Description (optional)");desc.setMinLines(2);
+        form.addView(name);form.addView(desc);
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle("Create project").setView(form).setNegativeButton("Cancel",null).setPositiveButton("Create",null).create();
+        dialog.setOnShowListener(ignored->{
+            Button create=dialog.getButton(AlertDialog.BUTTON_POSITIVE);create.setAllCaps(false);create.setMinHeight(LifeOsUi.dp(this,40));create.setContentDescription("Create");
+            create.setOnClickListener(v->{
+                ProjectRepository.ProjectObject x=ProjectRepository.create(this,name.getText().toString().trim(),desc.getText().toString());
+                if(x==null){name.requestFocus();name.setError("Project name is required.");Toast.makeText(this,"Project name is required.",Toast.LENGTH_SHORT).show();return;}
+                Toast.makeText(this,"Project created",Toast.LENGTH_SHORT).show();dialog.dismiss();render();
+            });
+            Button cancel=dialog.getButton(AlertDialog.BUTTON_NEGATIVE);if(cancel!=null){cancel.setAllCaps(false);cancel.setMinHeight(LifeOsUi.dp(this,40));}
+        });
+        dialog.show();
+    }
     private void savePlace(){EditText name=new EditText(this);name.setHint("Place name, e.g. Office");name.setSingleLine(true);int p=LifeOsUi.dp(this,18);name.setPadding(p,0,p,0);new AlertDialog.Builder(this).setTitle("Save current place").setMessage("LifeOS will save the current Android location evidence with the label you choose.").setView(name).setNegativeButton("Cancel",null).setPositiveButton("Save",(d,w)->{Toast.makeText(this,"Getting current location…",Toast.LENGTH_SHORT).show();PlaceRepository.captureCurrent(this,name.getText().toString(),(place,error)->runOnUiThread(()->{if(place==null)Toast.makeText(this,error==null?"Could not save current place":error,Toast.LENGTH_LONG).show();else{Toast.makeText(this,"Place saved",Toast.LENGTH_SHORT).show();render();}}));}).show();}
 
     private String setupText(){if("people".equals(capabilityId))return "People is backed by Android Contacts. LifeOS will show only contacts Android allows it to read.";if("events".equals(capabilityId))return "Events is backed by Android Calendar. LifeOS will read real calendar events instead of guessing from notification text.";if("places".equals(capabilityId))return "Places uses Android location only when you explicitly choose to save your current place.";return "This source needs Android permission before LifeOS can expose it.";}
