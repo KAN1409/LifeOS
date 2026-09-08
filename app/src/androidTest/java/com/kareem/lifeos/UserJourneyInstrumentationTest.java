@@ -29,6 +29,20 @@ public final class UserJourneyInstrumentationTest {
         assertNav("Ask",AskLifeOsActivity.class);
     }
 
+    @Test public void fullLifeOsQaButtonRespondsImmediatelyInsteadOfBlockingTheUi() throws Exception {
+        Activity a=null;try{
+            ExperienceAudit.finish();
+            a=launch(new Intent(c,ExperienceAuditActivity.class));
+            UiObject2 run=device.wait(Until.findObject(By.text("Run full LifeOS test")),1500);assertNotNull("Full LifeOS QA run button missing",run);
+            long started=android.os.SystemClock.elapsedRealtime();run.click();
+            assertTrue("Full LifeOS QA button did not expose preparation state",device.wait(Until.hasObject(By.textContains("Preparing QA")),1000));
+            long elapsed=android.os.SystemClock.elapsedRealtime()-started;assertTrue("Full LifeOS QA button blocked visible UI for "+elapsed+"ms",elapsed<1500);
+        } finally {
+            finish(a);
+            ExperienceAudit.finish();
+        }
+    }
+
     @Test public void searchFieldShowsARealProviderObject() throws Exception {
         String name="QA Search Project "+UUID.randomUUID().toString().substring(0,8);ProjectRepository.ProjectObject p=ProjectRepository.create(c,name,"user journey");assertNotNull(p);
         Activity a=null;try{
