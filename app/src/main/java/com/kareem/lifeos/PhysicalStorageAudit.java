@@ -41,7 +41,8 @@ final class PhysicalStorageAudit {
 
                 boolean ok = true;
                 String quick = "missing";
-                int foreignKeys = -1;
+                int foreignKeys = 0;
+                boolean foreignKeyCheckRan = false;
                 SQLiteDatabase db = null;
                 try {
                     db = SQLiteDatabase.openDatabase(
@@ -58,6 +59,7 @@ final class PhysicalStorageAudit {
 
                     try (Cursor fk = db.rawQuery("PRAGMA foreign_key_check", null)) {
                         foreignKeys = fk.getCount();
+                        foreignKeyCheckRan = true;
                         if (foreignKeys != 0) {
                             ok = false;
                         }
@@ -74,10 +76,14 @@ final class PhysicalStorageAudit {
                     }
                 }
 
+                if (!foreignKeyCheckRan) {
+                    ok = false;
+                }
                 if (!j.optBoolean("path_private", false)) {
                     ok = false;
                 }
                 j.put("quick_check", quick);
+                j.put("foreign_key_check_ran", foreignKeyCheckRan);
                 j.put("foreign_key_violations", foreignKeys);
                 j.put("status", ok ? "PASS" : "FAIL");
                 if (ok) {
