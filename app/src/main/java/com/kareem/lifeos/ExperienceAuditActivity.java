@@ -28,9 +28,10 @@ import java.util.zip.ZipOutputStream;
 /** One tap: walk important LifeOS surfaces, run runtime invariants and export one QA ZIP. */
 public final class ExperienceAuditActivity extends Activity {
     private static final int BG=Color.rgb(13,17,23),SURFACE=Color.rgb(22,27,34),BORDER=Color.rgb(48,54,61),TEXT=Color.rgb(230,237,243),MUTED=Color.rgb(139,148,158),GREEN=Color.rgb(63,185,80),BLUE=Color.rgb(47,129,247);
-    private TextView state;private Button runButton;private boolean launching,preparing;
-    @Override public void onCreate(Bundle b){super.onCreate(b);render();}
+    private TextView state;private Button runButton;private boolean launching,preparing;private volatile boolean auditCancelled;
+    @Override public void onCreate(Bundle b){super.onCreate(b);auditCancelled=false;render();}
     @Override protected void onResume(){super.onResume();launching=false;if(ExperienceAudit.active())continueAudit();}
+    @Override protected void onDestroy(){auditCancelled=true;super.onDestroy();}
 
     private void render(){LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(20),dp(24),dp(20),dp(24));root.setBackgroundColor(BG);TextView h=t("Full LifeOS QA",25,TEXT);h.setTypeface(Typeface.DEFAULT,Typeface.BOLD);root.addView(h);TextView sub=t("Runs non-destructive runtime/provider checks, then automatically visits product and diagnostic screens, captures pixels + hierarchy + runtime state, and exports one QA ZIP.",14,MUTED);sub.setPadding(0,dp(8),0,dp(18));root.addView(sub);state=t("Ready",13,GREEN);root.addView(state);runButton=button("Run full LifeOS test",true);runButton.setOnClickListener(v->begin());LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(-1,dp(50));p.setMargins(0,dp(20),0,0);root.addView(runButton,p);Button back=button("Back",false);back.setOnClickListener(v->finish());LinearLayout.LayoutParams bp=new LinearLayout.LayoutParams(-1,dp(48));bp.setMargins(0,dp(10),0,0);root.addView(back,bp);TextView info=t("Output: qa_report.json + db_integrity.json + screenshots (.png) + screen structure (.json) + runtime/data snapshot (.json), saved as one ZIP in Downloads/LifeOS on Android 10+ or app external files on older Android. The test does not mark commitments handled or create/delete user data.",12,MUTED);info.setPadding(0,dp(20),0,0);root.addView(info);setContentView(root);}
 
@@ -40,13 +41,16 @@ public final class ExperienceAuditActivity extends Activity {
         new Thread(()->{
             try{
                 List<ExperienceAudit.Target> xs=buildTargets();
+                if(auditCancelled||isFinishing()||(Build.VERSION.SDK_INT>=17&&isDestroyed()))return;
                 ExperienceAudit.start(this,xs);
                 runOnUiThread(()->{
-                    if(isFinishing()||(Build.VERSION.SDK_INT>=17&&isDestroyed())){ExperienceAudit.finish();return;}
+                    if(auditCancelled||isFinishing()||(Build.VERSION.SDK_INT>=17&&isDestroyed())){ExperienceAudit.finish();return;}
                     preparing=false;runButton.setEnabled(true);continueAudit();
                 });
             }catch(Throwable t){
+                if(auditCancelled)return;
                 runOnUiThread(()->{
+                    if(auditCancelled)return;
                     preparing=false;runButton.setEnabled(true);state.setText("QA start failed · "+safeMessage(t));
                 });
             }
